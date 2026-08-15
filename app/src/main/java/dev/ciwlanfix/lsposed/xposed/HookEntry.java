@@ -23,7 +23,13 @@ public final class HookEntry implements IXposedHookLoadPackage {
                     break;
                 case Const.PKG_IWLAN:
                     LogX.i("load " + Const.PKG_IWLAN + " process=" + lpparam.processName);
-                    hookAppCreate(lpparam, (ctx) -> Fn3QnsFallback.install(lpparam.classLoader, ctx));
+                    Context existing = null;
+                    try {
+                        existing = AndroidAppHelper.currentApplication();
+                    } catch (Throwable ignored) {
+                    }
+                    Fn3QnsFallback.install(lpparam.classLoader, existing);
+                    hookAppCreate(lpparam, Fn3QnsFallback::attachContext);
                     break;
                 case Const.PKG_ANDROID_PHONE:
                     LogX.i("load " + Const.PKG_ANDROID_PHONE + " process=" + lpparam.processName

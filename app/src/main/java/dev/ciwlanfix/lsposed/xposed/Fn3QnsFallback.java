@@ -1,11 +1,15 @@
 package dev.ciwlanfix.lsposed.xposed;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.HandlerThread;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -14,27 +18,31 @@ import de.robv.android.xposed.XposedHelpers;
 final class Fn3QnsFallback {
     private static final java.util.concurrent.atomic.AtomicBoolean INSTALLED =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+    private static final ConcurrentHashMap<Integer, Object> PROVIDERS = new ConcurrentHashMap<>();
+    private static final int APN_MASK_SLOT0_STYLE = 2646;
     private static Context appCtx;
+    private static Handler injectHandler;
     private static long lastSameLogMs;
     private static volatile boolean seenQns3;
     private static volatile boolean latched;
 
     private Fn3QnsFallback() {}
 
-    static void install(ClassLoader cl, Context ctx) {
-        Context app = ctx != null ? ctx.getApplicationContext() : null;
-        if (app == null) {
-            app = ctx;
-        }
-        if (app == null) {
-            LogX.w("[FN3] install skipped: context is null");
+    static void attachContext(Context ctx) {
+        if (ctx == null) {
             return;
+        }
+        appCtx = ctx.getApplicationContext() != null ? ctx.getApplicationContext() : ctx;
+        startInjector();
+    }
+
+    static void install(ClassLoader cl, Context ctx) {
+        if (ctx != null) {
+            attachContext(ctx);
         }
         if (!INSTALLED.compareAndSet(false, true)) {
-            appCtx = app;
             return;
         }
-        appCtx = app;
         try {
             hookFrameworkProvider(cl);
         } catch (Throwable t) {
@@ -58,11 +66,14 @@ final class Fn3QnsFallback {
             try {
                 Reflects.dumpMethods(c, "qualified");
                 hookUpdateMethods(c);
+                hookUpdateQualifiedNetworks(c);
+                hookProviderLifecycle(c);
             } catch (Throwable t) {
                 LogX.e("[FN3] hook " + n + " failed", t);
             }
         }
         hookIwlanPreferred(cl);
+        startInjector();
     }
 
     private static void hookIwlanPreferred(ClassLoader cl) {
@@ -121,6 +132,143 @@ final class Fn3QnsFallback {
         hookUpdateMethods(nap);
     }
 
+    private static void hookProviderLifecycle(Class<?> cls) {
+        if (cls.getName().endsWith("QualifiedNetworksServiceImpl")) {
+            try {
+                XposedHelpers.findAndHookMethod(cls, "onCreateNetworkAvailabilityProvider", int.class,
+                        new XC_MethodHook() {
+                            @Override
+                            protected void afterHookedMethod(MethodHookParam param) {
+                                int slot = (Integer) param.args[0];
+                                rememberProvider(slot, param.getResult());
+                                LogX.i("[FN3] onCreateNetworkAvailabilityProvider slot=" + slot
+                                        + " provider=" + param.getResult());
+                            }
+                        });
+            } catch (Throwable t) {
+                LogX.w("[FN3] hook onCreateNetworkAvailabilityProvider: " + t);
+            }
+        }
+        if (cls.getName().contains("NetworkAvailabilityProviderImpl")) {
+            for (java.lang.reflect.Constructor<?> ctor : cls.getDeclaredConstructors()) {
+                XposedBridge.hookMethod(ctor, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        int slot = slotOf(param.thisObject);
+                        rememberProvider(slot, param.thisObject);
+                        LogX.i("[FN3] provider ctor slot=" + slot + " " + param.thisObject);
+                    }
+                });
+            }
+        }
+    }
+
+    private static void hookUpdateQualifiedNetworks(Class<?> cls) {
+        for (Method m : cls.getDeclaredMethods()) {
+            if (!"updateQualifiedNetworks".equals(m.getName())) {
+                continue;
+            }
+            LogX.i("[FN3] hook " + cls.getName() + "." + m.getName() + Arrays.toString(m.getParameterTypes()));
+            try {
+                XposedBridge.hookMethod(m, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        int slot = slotOf(param.thisObject);
+                        LogX.i("[FN3] updateQualifiedNetworks slot=" + slot + " raw=" + param.args[0]);
+                        rememberProvider(slot, param.thisObject);
+                    }
+                });
+            } catch (Throwable t) {
+                LogX.w("[FN3] hook updateQualifiedNetworks failed: " + t);
+            }
+        }
+    }
+
+    private static void rememberProvider(int slot, Object provider) {
+        if (provider == null || slot < 0) {
+            return;
+        }
+        PROVIDERS.put(slot, provider);
+        LogX.i("[FN3] remembered provider slot=" + slot + " total=" + PROVIDERS.keySet());
+    }
+
+    private static synchronized void startInjector() {
+        if (injectHandler != null) {
+            return;
+        }
+        HandlerThread ht = new HandlerThread("CIWLAN_FIX_FN3");
+        ht.start();
+        injectHandler = new Handler(ht.getLooper());
+        injectHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    injectSlot1IfNeeded();
+                } catch (Throwable t) {
+                    LogX.e("[FN3] inject failed", t);
+                }
+                if (injectHandler != null) {
+                    injectHandler.postDelayed(this, 5000L);
+                }
+            }
+        });
+    }
+
+    private static void injectSlot1IfNeeded() {
+        if (!shouldInject()) {
+            return;
+        }
+        Object provider = PROVIDERS.get(Const.SLOT_TARGET);
+        if (provider == null) {
+            logSame("[FN3] inject wait: no slot1 NetworkAvailabilityProvider yet keys=" + PROVIDERS.keySet());
+            return;
+        }
+        List<Integer> iwlan = new ArrayList<>(Collections.singletonList(Const.ACCESS_NETWORK_IWLAN));
+        try {
+            XposedHelpers.callMethod(provider, "updateQualifiedNetworkTypes", Const.APN_TYPE_IMS, iwlan);
+            XposedHelpers.callMethod(provider, "updateQualifiedNetworkTypes", APN_MASK_SLOT0_STYLE,
+                    new ArrayList<>(iwlan));
+            latched = true;
+            if (appCtx != null) {
+                Prefs.writeGlobal(appCtx, Const.G_FN3_LATCHED, "1");
+                Prefs.writeGlobal(appCtx, Const.G_QNS_SLOT1_IMS_PREF, "5");
+            }
+            LogX.i("[FN3] injected slot1 IMS/APN mask networks=[5] via " + provider.getClass().getName());
+        } catch (Throwable t) {
+            LogX.e("[FN3] inject updateQualifiedNetworkTypes failed", t);
+        }
+    }
+
+    private static boolean shouldInject() {
+        if (appCtx == null) {
+            return false;
+        }
+        String mode = Prefs.fn3Mode(appCtx);
+        if (Const.FN3_OFF.equals(mode)) {
+            return false;
+        }
+        if (Prefs.crossSimCall1(appCtx) != 1) {
+            logSame("[FN3] inject skip: cross_sim_call_1 != 1");
+            return false;
+        }
+        if (WifiAssoc.associated(appCtx)) {
+            logSame("[FN3] inject skip: Wi-Fi associated");
+            return false;
+        }
+        if (Const.FN3_ON.equals(mode)) {
+            return true;
+        }
+        if (!Prefs.fn2On(appCtx)) {
+            return false;
+        }
+        String availRaw = Prefs.readGlobal(appCtx, Const.G_SLOT1_CIWLAN_AVAILABLE);
+        if (availRaw != null && Prefs.parseBool(availRaw, false)) {
+            logSame("[FN3] inject skip: isCiwlanAvailable(1)=true");
+            return false;
+        }
+        return true;
+    }
+
     private static void hookUpdateMethods(Class<?> cls) {
         for (Method m : cls.getDeclaredMethods()) {
             if (!"updateQualifiedNetworkTypes".equals(m.getName())) {
@@ -144,6 +292,7 @@ final class Fn3QnsFallback {
     private static void onUpdate(XC_MethodHook.MethodHookParam param) {
         try {
             int slot = slotOf(param.thisObject);
+            rememberProvider(slot, param.thisObject);
             int apn = apnOf(param.args);
             Object networksArg = networksOf(param.args);
             List<Integer> before = toIntList(networksArg);
