@@ -46,7 +46,13 @@ final class Fn2CiwlanPref {
     }
 
     private static void run(String why) {
-        if (gw == null || gw.etm() == null) {
+        if (gw == null) {
+            return;
+        }
+        if (Prefs.fn2On(gw.context())) {
+            CrossSimSlot1.setEnabled(gw.context(), true, why);
+        }
+        if (gw.etm() == null) {
             LogX.skip("[FN2] ExtTelephonyManager not ready (" + why + ")");
             return;
         }
@@ -98,6 +104,7 @@ final class Fn2CiwlanPref {
             boolean reportAvail = rawAvail != null ? rawAvail : avail;
             Prefs.writeGlobal(gw.context(), Const.G_SLOT1_CIWLAN_AVAILABLE, reportAvail ? "1" : "0");
             Prefs.writeGlobal(gw.context(), Const.G_SLOT1_EPDG_CELL, epdg ? "1" : "0");
+            CrossSimSlot1.logIms(gw.context(), why);
             if (!reportAvail) {
                 LogX.i("[FN2] modem isCiwlanAvailable(1)=false after ONLY/ONLY; Function 3 will fake WLAN HOME");
             }
@@ -124,6 +131,9 @@ final class Fn2CiwlanPref {
     }
 
     private static void restore(String why) {
+        if (gw != null) {
+            CrossSimSlot1.setEnabled(gw.context(), false, why);
+        }
         if (gw == null || gw.etm() == null) {
             LogX.skip("[FN2] restore skipped, service not ready (" + why + ")");
             return;

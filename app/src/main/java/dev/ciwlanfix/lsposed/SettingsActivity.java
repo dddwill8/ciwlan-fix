@@ -92,11 +92,12 @@ public final class SettingsActivity extends Activity {
         String wlan = dash(readGlobal("ciwlan_fix_fn3_wlan_reg"));
         String setup = dash(readGlobal("ciwlan_fix_fn3_setup"));
         String cross = dash(readGlobal("cross_sim_call_1"));
+        String crossSub = dash(readGlobal("ciwlan_fix_cross_sim_sub1"));
         if ("—".equals(fn2Done) && "—".equals(avail) && "—".equals(qns)) {
             tv.setText(R.string.status_empty);
             return;
         }
-        tv.setText("cross_sim_call_1=" + cross
+        tv.setText("cross_sim_call_1=" + cross + "  sub1=" + crossSub
                 + "\nfn2_done=" + fn2Done
                 + "\nisCiwlanAvailable(1)=" + avail + "  (modem raw)"
                 + "\nisEpdgOverCellular(1)=" + epdg

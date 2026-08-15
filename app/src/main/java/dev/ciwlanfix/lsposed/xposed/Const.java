@@ -54,6 +54,7 @@ final class Const {
 
     static final String DEFAULT_PLMN = "99999";
     static final String CROSS_SIM_CALL_1 = "cross_sim_call_1";
+    static final String G_CROSS_SIM_SUB1 = "ciwlan_fix_cross_sim_sub1";
 
     static final long FN1_MIN_INTERVAL_MS = 15_000L;
     static final long FN1_MAX_BACKOFF_MS = 120_000L;
