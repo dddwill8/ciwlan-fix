@@ -3,7 +3,6 @@ package dev.ciwlanfix.lsposed.xposed;
 import android.content.Context;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
-import android.telephony.ims.ImsMmTelManager;
 
 final class CrossSimSlot1 {
     private static Boolean applied;
@@ -22,19 +21,20 @@ final class CrossSimSlot1 {
             LogX.skip("[FN2] Cross-SIM skip, no subId for slot 1 (" + why + ")");
             return;
         }
+        Object mgr = mmTel(ctx, subId);
+        if (mgr == null) {
+            LogX.skip("[FN2] ImsMmTelManager missing (" + why + ")");
+            return;
+        }
         try {
-            ImsMmTelManager mgr = ImsMmTelManager.createForSubscriptionId(subId);
-            boolean before = false;
-            try {
-                before = mgr.isCrossSimCallingEnabled();
-            } catch (Throwable ignored) {
+            Boolean before = (Boolean) Reflects.callOrNull(mgr, "isCrossSimCallingEnabled");
+            if (!Boolean.valueOf(enable).equals(before)) {
+                Reflects.call(mgr, "setCrossSimCallingEnabled", enable);
             }
-            if (before != enable) {
-                mgr.setCrossSimCallingEnabled(enable);
-            }
-            boolean after = mgr.isCrossSimCallingEnabled();
-            applied = after == enable ? enable : null;
-            Prefs.writeGlobal(ctx, Const.G_CROSS_SIM_SUB1, after ? "1" : "0");
+            Boolean after = (Boolean) Reflects.callOrNull(mgr, "isCrossSimCallingEnabled");
+            boolean ok = Boolean.valueOf(enable).equals(after);
+            applied = ok ? enable : null;
+            Prefs.writeGlobal(ctx, Const.G_CROSS_SIM_SUB1, Boolean.TRUE.equals(after) ? "1" : "0");
             LogX.i("[FN2] setCrossSimCallingEnabled(subId=" + subId + "," + enable
                     + ") before=" + before + " after=" + after + " why=" + why);
             logIms(ctx, why);
@@ -56,5 +56,26 @@ final class CrossSimSlot1 {
         } catch (Throwable t) {
             LogX.w("[FN2] ims query: " + t);
         }
+    }
+
+    private static Object mmTel(Context ctx, int subId) {
+        try {
+            Class<?> cls = Class.forName("android.telephony.ims.ImsMmTelManager");
+            try {
+                return cls.getMethod("createForSubscriptionId", int.class).invoke(null, subId);
+            } catch (NoSuchMethodException ignored) {
+            }
+            Class<?> imsCls = Class.forName("android.telephony.ims.ImsManager");
+            Object ims = ctx.getSystemService(imsCls);
+            if (ims != null) {
+                Object mgr = Reflects.callOrNull(ims, "getImsMmTelManager", subId);
+                if (mgr != null) {
+                    return mgr;
+                }
+            }
+        } catch (Throwable t) {
+            LogX.w("[FN2] ImsMmTelManager: " + t);
+        }
+        return null;
     }
 }
