@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CIWLAN Fix</string>
+    <string name="xposed_description">Runtime-only Cross-SIM / CIWLAN helper for slot 1. Never writes partitions, NV, QCN, or SIM FPLMN.</string>
+    <string name="safety_banner">假回锁设备：本模块只做运行时 Hook 与公开/隐藏电话 API。禁止刷写任何分区、禁止 Magisk overlay、禁止 QCN/EFS/NV、禁止写 SIM FPLMN。关模块 + 关开关必须能还原。</string>
+    <string name="fn1_title">功能 1 · 强制卡 2 / slot 1 无服务</string>
+    <string name="fn1_summary">用手动选网到无效 PLMN（persist=false）复现「无服务 / 仅紧急呼叫」。默认关，仅作复现辅助。</string>
+    <string name="fn1_plmn">无效 PLMN（默认 99999）</string>
+    <string name="fn2_title">功能 2 · slot 1 CIWLAN = ONLY/ONLY</string>
+    <string name="fn2_summary">只改 slot 1 的 QTI CiwlanModeUserPreference。绝不改 slot 0，也不写全局 CELLULAR_I_WLAN_PREFERENCE_STATE_KEY。</string>
+    <string name="fn3_title">功能 3 · QNS IWLAN 回退</string>
+    <string name="fn3_summary">仅当功能 2 之后 isCiwlanAvailable(1) 仍为 false，且 QNS slot1 IMS 仍报 3(EUTRAN) 时，运行时把 IMS 首选改成 5(IWLAN)。</string>
+    <string name="fn3_auto">自动回退（默认）</string>
+    <string name="fn3_on">强制开启</string>
+    <string name="fn3_off">关闭</string>
+    <string name="restore">关闭全部功能并还原 slot 1</string>
+    <string name="restore_hint">先等 logcat 出现 restored，再去 LSPosed 禁用模块并重启。</string>
+    <string name="logcat_hint">过滤：adb logcat -s CIWLAN_FIX:D\n成功不能只看 UI，必须同时有 ONLY/ONLY、isCiwlanAvailable(1) 或 ePDG-over-cellular、QNS pref=5、以及真实 ePDG/IKE。</string>
+    <string name="grant_hint">若开关无法写入 settings global，在电脑执行：\nadb shell su 0 pm grant dev.ciwlanfix.lsposed android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="saved">已保存</string>
+    <string name="restore_done">已关闭全部功能。请立即看 CIWLAN_FIX 日志确认还原，然后再禁用模块。</string>
+</resources>

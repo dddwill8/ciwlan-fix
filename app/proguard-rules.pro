@@ -1,0 +1,2 @@
+-keep class dev.ciwlanfix.lsposed.** { *; }
+-keepclassmembers class dev.ciwlanfix.lsposed.** { *; }
