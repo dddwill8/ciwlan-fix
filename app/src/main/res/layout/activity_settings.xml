@@ -115,6 +115,29 @@
                 android:text="@string/fn3_off" />
         </RadioGroup>
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/status_title"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/runtime_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="monospace"
+            android:text="@string/status_empty"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/refresh_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/refresh_status" />
+
         <Button
             android:id="@+id/restore"
             android:layout_width="match_parent"

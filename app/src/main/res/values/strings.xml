@@ -13,6 +13,9 @@
     <string name="fn3_auto">自动回退（默认）</string>
     <string name="fn3_on">强制开启</string>
     <string name="fn3_off">关闭</string>
+    <string name="status_title">运行状态（看这个，不要只看「无服务」）</string>
+    <string name="status_empty">还没读到宿主写入的状态。常见原因：LSPosed 没勾 com.qti.phone / vendor.qti.iwlan，或还没重启。</string>
+    <string name="refresh_status">刷新运行状态</string>
     <string name="restore">关闭全部功能并还原 slot 1</string>
     <string name="restore_hint">先等 logcat 出现 restored，再去 LSPosed 禁用模块并重启。</string>
     <string name="logcat_hint">过滤：adb logcat -s CIWLAN_FIX:D\n成功不能只看 UI，必须同时有 ONLY/ONLY、isCiwlanAvailable(1) 或 ePDG-over-cellular、QNS pref=5、以及真实 ePDG/IKE。</string>

@@ -62,6 +62,53 @@ final class Fn3QnsFallback {
                 LogX.e("[FN3] hook " + n + " failed", t);
             }
         }
+        hookIwlanPreferred(cl);
+    }
+
+    private static void hookIwlanPreferred(ClassLoader cl) {
+        String[] names = new String[]{
+                "vendor.qti.iwlan.IWlanNetworkService",
+                "vendor.qti.iwlan.IWlanNetworkService$IWlanNetworkServiceProvider",
+                "vendor.qti.iwlan.IWlanNetworkServiceProvider",
+                "com.qualcomm.qti.iwlan.IWlanNetworkService",
+                "com.qti.iwlan.IWlanNetworkService",
+        };
+        for (String n : names) {
+            Class<?> c = Reflects.findOrNull(cl, n);
+            if (c == null) {
+                continue;
+            }
+            LogX.i("[FN3] found " + n);
+            for (Method m : c.getDeclaredMethods()) {
+                String name = m.getName();
+                String lower = name.toLowerCase();
+                if (!(lower.contains("iwlanpreferred") || "isIwlanPreferred".equals(name)
+                        || "getIwlanPreferred".equals(name))) {
+                    continue;
+                }
+                if (m.getReturnType() != boolean.class && m.getReturnType() != Boolean.class) {
+                    continue;
+                }
+                LogX.i("[FN3] hook preferred " + n + "." + name);
+                try {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            LogX.i("[FN3] " + n + "." + name + " raw=" + param.getResult());
+                            if (appCtx != null && !Const.FN3_OFF.equals(Prefs.fn3Mode(appCtx))
+                                    && Prefs.fn2On(appCtx)
+                                    && Prefs.crossSimCall1(appCtx) == 1
+                                    && !WifiAssoc.associated(appCtx)) {
+                                param.setResult(true);
+                                LogX.i("[FN3] " + name + " forced true (runtime-only)");
+                            }
+                        }
+                    });
+                } catch (Throwable t) {
+                    LogX.w("[FN3] hook preferred " + n + "." + name + " failed: " + t);
+                }
+            }
+        }
     }
 
     private static void hookFrameworkProvider(ClassLoader cl) {
@@ -163,20 +210,23 @@ final class Fn3QnsFallback {
             Prefs.writeGlobal(appCtx, Const.G_FN3_LATCHED, "0");
             return false;
         }
-        boolean fn2Done = Prefs.readGlobalInt(appCtx, Const.G_FN2_DONE, 0) == 1;
-        boolean avail = Prefs.parseBool(Prefs.readGlobal(appCtx, Const.G_SLOT1_CIWLAN_AVAILABLE), false);
+        String availRaw = Prefs.readGlobal(appCtx, Const.G_SLOT1_CIWLAN_AVAILABLE);
+        boolean availKnownTrue = availRaw != null && Prefs.parseBool(availRaw, false);
         boolean seen3 = seenQns3 || Prefs.readGlobalInt(appCtx, Const.G_SEEN_QNS3, 0) == 1;
         boolean nowLatched = latched || Prefs.readGlobalInt(appCtx, Const.G_FN3_LATCHED, 0) == 1;
-        if (nowLatched && !avail) {
+        if (availKnownTrue) {
+            logSame("[FN3] auto skip: isCiwlanAvailable(1)=true, QNS fallback not needed");
+            return false;
+        }
+        if (nowLatched || seen3) {
+            if (!latched) {
+                latched = true;
+                Prefs.writeGlobal(appCtx, Const.G_FN3_LATCHED, "1");
+                LogX.i("[FN3] auto latch: FN2 on, isCiwlanAvailable(1) not true, QNS slot1 IMS was 3");
+            }
             return true;
         }
-        if (fn2Done && !avail && seen3) {
-            latched = true;
-            Prefs.writeGlobal(appCtx, Const.G_FN3_LATCHED, "1");
-            LogX.i("[FN3] auto latch: FN2 done, isCiwlanAvailable(1)=false, QNS slot1 IMS was 3");
-            return true;
-        }
-        logSame("[FN3] auto wait: fn2Done=" + fn2Done + " ciwlanAvailable(1)=" + avail + " seenPref3=" + seen3);
+        logSame("[FN3] auto wait: ciwlanAvailableRaw=" + availRaw + " seenPref3=" + seen3);
         return false;
     }
 

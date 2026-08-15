@@ -9,6 +9,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.RadioGroup;
 import android.widget.Switch;
+import android.widget.TextView;
 import android.widget.Toast;
 
 public final class SettingsActivity extends Activity {
@@ -41,6 +42,7 @@ public final class SettingsActivity extends Activity {
         plmn = findViewById(R.id.fn1_plmn);
         fn3 = findViewById(R.id.fn3_group);
         Button restore = findViewById(R.id.restore);
+        Button refresh = findViewById(R.id.refresh_status);
 
         fn1.setChecked(readInitialBool(G_FN1, K_FN1, false));
         fn2.setChecked(readInitialBool(G_FN2, K_FN2, true));
@@ -63,13 +65,45 @@ public final class SettingsActivity extends Activity {
             }
         });
         restore.setOnClickListener(this::onRestore);
+        refresh.setOnClickListener(v -> refreshStatus());
         persist();
+        refreshStatus();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshStatus();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         persist();
+    }
+
+    private void refreshStatus() {
+        TextView tv = findViewById(R.id.runtime_status);
+        String fn2Done = dash(readGlobal("ciwlan_fix_fn2_done"));
+        String avail = dash(readGlobal("ciwlan_fix_slot1_ciwlan_available"));
+        String epdg = dash(readGlobal("ciwlan_fix_slot1_epdg_over_cellular"));
+        String qns = dash(readGlobal("ciwlan_fix_qns_slot1_ims_pref"));
+        String fn3 = dash(readGlobal("ciwlan_fix_fn3_latched"));
+        String cross = dash(readGlobal("cross_sim_call_1"));
+        if ("—".equals(fn2Done) && "—".equals(avail) && "—".equals(qns)) {
+            tv.setText(R.string.status_empty);
+            return;
+        }
+        tv.setText("cross_sim_call_1=" + cross
+                + "\nfn2_done=" + fn2Done
+                + "\nisCiwlanAvailable(1)=" + avail
+                + "\nisEpdgOverCellular(1)=" + epdg
+                + "\nQNS slot1 IMS pref=" + qns + "  (3=EUTRAN, 5=IWLAN)"
+                + "\nfn3_latched=" + fn3);
+    }
+
+    private static String dash(String v) {
+        return (v == null || v.trim().isEmpty()) ? "—" : v.trim();
     }
 
     private void onRestore(View v) {
