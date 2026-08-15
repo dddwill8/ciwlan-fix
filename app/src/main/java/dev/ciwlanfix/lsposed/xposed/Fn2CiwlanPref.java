@@ -86,17 +86,20 @@ final class Fn2CiwlanPref {
         try {
             gw.dumpSlot(Const.SLOT_TARGET);
             boolean avail = gw.isCiwlanAvailable(Const.SLOT_TARGET);
+            Boolean rawAvail = QtiPhoneHooks.rawCiwlanSlot1();
             boolean epdg = gw.isEpdgOverCellular(Const.SLOT_TARGET);
             Object pref = gw.getUserPref(Const.SLOT_TARGET);
             LogX.i("[FN2] requery " + why
                     + " pref=" + gw.describeConfig(pref)
                     + " isCiwlanAvailable(1)=" + avail
+                    + " raw=" + rawAvail
                     + " isEpdgOverCellularDataSupported(1)=" + epdg);
             Prefs.writeGlobal(gw.context(), Const.G_FN2_DONE, "1");
-            Prefs.writeGlobal(gw.context(), Const.G_SLOT1_CIWLAN_AVAILABLE, avail ? "1" : "0");
+            boolean reportAvail = rawAvail != null ? rawAvail : avail;
+            Prefs.writeGlobal(gw.context(), Const.G_SLOT1_CIWLAN_AVAILABLE, reportAvail ? "1" : "0");
             Prefs.writeGlobal(gw.context(), Const.G_SLOT1_EPDG_CELL, epdg ? "1" : "0");
-            if (!avail) {
-                LogX.i("[FN2] isCiwlanAvailable(1)=false after ONLY/ONLY; Function 3 auto may engage if QNS stays at 3");
+            if (!reportAvail) {
+                LogX.i("[FN2] modem isCiwlanAvailable(1)=false after ONLY/ONLY; Function 3 will fake WLAN HOME");
             }
         } catch (Throwable t) {
             LogX.e("[FN2] requery failed", t);

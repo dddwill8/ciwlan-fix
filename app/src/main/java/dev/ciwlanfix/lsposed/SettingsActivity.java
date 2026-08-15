@@ -89,6 +89,8 @@ public final class SettingsActivity extends Activity {
         String epdg = dash(readGlobal("ciwlan_fix_slot1_epdg_over_cellular"));
         String qns = dash(readGlobal("ciwlan_fix_qns_slot1_ims_pref"));
         String fn3 = dash(readGlobal("ciwlan_fix_fn3_latched"));
+        String wlan = dash(readGlobal("ciwlan_fix_fn3_wlan_reg"));
+        String setup = dash(readGlobal("ciwlan_fix_fn3_setup"));
         String cross = dash(readGlobal("cross_sim_call_1"));
         if ("—".equals(fn2Done) && "—".equals(avail) && "—".equals(qns)) {
             tv.setText(R.string.status_empty);
@@ -96,10 +98,12 @@ public final class SettingsActivity extends Activity {
         }
         tv.setText("cross_sim_call_1=" + cross
                 + "\nfn2_done=" + fn2Done
-                + "\nisCiwlanAvailable(1)=" + avail
+                + "\nisCiwlanAvailable(1)=" + avail + "  (modem raw)"
                 + "\nisEpdgOverCellular(1)=" + epdg
                 + "\nQNS slot1 IMS pref=" + qns + "  (3=EUTRAN, 5=IWLAN)"
-                + "\nfn3_latched=" + fn3);
+                + "\nfn3_latched=" + fn3
+                + "\nfn3_wlan_reg=" + wlan
+                + "\nfn3_setup=" + setup);
     }
 
     private static String dash(String v) {

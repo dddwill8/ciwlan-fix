@@ -9,7 +9,7 @@
     <string name="fn2_title">功能 2 · slot 1 CIWLAN = ONLY/ONLY</string>
     <string name="fn2_summary">只改 slot 1 的 QTI CiwlanModeUserPreference。绝不改 slot 0，也不写全局 CELLULAR_I_WLAN_PREFERENCE_STATE_KEY。</string>
     <string name="fn3_title">功能 3 · QNS IWLAN 回退</string>
-    <string name="fn3_summary">仅当功能 2 之后 isCiwlanAvailable(1) 仍为 false，且 QNS slot1 IMS 仍报 3(EUTRAN) 时，运行时把 IMS 首选改成 5(IWLAN)。</string>
+    <string name="fn3_summary">功能 2 之后若仍无跨卡 ePDG：把 slot1 QNS IMS 改成 5(IWLAN)，并把 WLAN PS 报成已注册，促使框架发起 setupDataCall。不写分区/NV。</string>
     <string name="fn3_auto">自动回退（默认）</string>
     <string name="fn3_on">强制开启</string>
     <string name="fn3_off">关闭</string>

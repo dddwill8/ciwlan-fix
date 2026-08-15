@@ -16,6 +16,9 @@ final class QtiPhoneHooks {
     private static volatile ExtPhoneGateway gw;
     private static volatile Object pendingImpl;
     private static volatile Object pendingCtrl;
+    private static volatile Boolean rawCiwlanSlot1;
+    private static final java.util.concurrent.atomic.AtomicBoolean FN3_RX =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private QtiPhoneHooks() {}
 
@@ -145,19 +148,60 @@ final class QtiPhoneHooks {
         return sb.append("]").toString();
     }
 
-    static void installBooleanLoggers(ClassLoader cl) {
-        hookBoolean(cl, "com.qti.extphone.ExtTelephonyManager", "isCiwlanAvailable");
-        hookBoolean(cl, "com.qti.extphone.ExtTelephonyManager", "isEpdgOverCellularDataSupported");
-        hookBoolean(cl, "com.qti.phone.ExtTelephonyServiceImpl", "isCiwlanAvailable");
-        hookBoolean(cl, "com.qti.phone.ExtTelephonyServiceImpl", "isEpdgOverCellularDataSupported");
-        hookBoolean(cl, "com.qti.phone.QtiRadioProxy", "isCiwlanAvailable");
-        hookBoolean(cl, "com.qti.phone.QtiRadioProxy", "isEpdgOverCellularDataSupported");
-        hookBoolean(cl, "com.qti.phone.QtiRadioAidl", "isCiwlanAvailable");
-        hookBoolean(cl, "com.qti.phone.QtiRadioAidl", "isEpdgOverCellularDataSupported");
-        hookCallbackBooleans(cl);
+    static Boolean rawCiwlanSlot1() {
+        return rawCiwlanSlot1;
     }
 
-    private static void hookBoolean(ClassLoader cl, String cls, String method) {
+    static void registerFn3StatusReceiver(Context ctx) {
+        if (ctx == null || !FN3_RX.compareAndSet(false, true)) {
+            return;
+        }
+        android.content.IntentFilter filter = new android.content.IntentFilter(Const.ACTION_FN3_STATUS);
+        android.content.BroadcastReceiver rx = new android.content.BroadcastReceiver() {
+            @Override
+            public void onReceive(Context c, android.content.Intent intent) {
+                if (intent == null) {
+                    return;
+                }
+                writeExtra(c, intent, "qns", Const.G_QNS_SLOT1_IMS_PREF);
+                writeExtra(c, intent, "latched", Const.G_FN3_LATCHED);
+                writeExtra(c, intent, "wlan", Const.G_FN3_WLAN_REG);
+                writeExtra(c, intent, "setup", Const.G_FN3_SETUP);
+            }
+        };
+        try {
+            ctx.registerReceiver(rx, filter, Context.RECEIVER_EXPORTED);
+            LogX.i("FN3 status receiver registered");
+        } catch (Throwable t) {
+            try {
+                ctx.registerReceiver(rx, filter);
+                LogX.i("FN3 status receiver registered (legacy)");
+            } catch (Throwable t2) {
+                LogX.w("FN3 status receiver: " + t2);
+            }
+        }
+    }
+
+    private static void writeExtra(Context ctx, android.content.Intent intent, String extra, String key) {
+        String v = intent.getStringExtra(extra);
+        if (v != null && !v.isEmpty()) {
+            Prefs.writeGlobal(ctx, key, v);
+        }
+    }
+
+    static void installBooleanLoggers(ClassLoader cl, Context ctx) {
+        hookBoolean(cl, ctx, "com.qti.extphone.ExtTelephonyManager", "isCiwlanAvailable");
+        hookBoolean(cl, ctx, "com.qti.extphone.ExtTelephonyManager", "isEpdgOverCellularDataSupported");
+        hookBoolean(cl, ctx, "com.qti.phone.ExtTelephonyServiceImpl", "isCiwlanAvailable");
+        hookBoolean(cl, ctx, "com.qti.phone.ExtTelephonyServiceImpl", "isEpdgOverCellularDataSupported");
+        hookBoolean(cl, ctx, "com.qti.phone.QtiRadioProxy", "isCiwlanAvailable");
+        hookBoolean(cl, ctx, "com.qti.phone.QtiRadioProxy", "isEpdgOverCellularDataSupported");
+        hookBoolean(cl, ctx, "com.qti.phone.QtiRadioAidl", "isCiwlanAvailable");
+        hookBoolean(cl, ctx, "com.qti.phone.QtiRadioAidl", "isEpdgOverCellularDataSupported");
+        hookCallbackBooleans(cl, ctx);
+    }
+
+    private static void hookBoolean(ClassLoader cl, Context ctx, String cls, String method) {
         Class<?> c = Reflects.findOrNull(cl, cls);
         if (c == null) {
             return;
@@ -170,13 +214,20 @@ final class QtiPhoneHooks {
                 XposedBridge.hookMethod(m, new XC_MethodHook() {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
-                        Object slotHint = null;
-                        if (param.args != null && param.args.length > 0 && param.args[0] instanceof Integer) {
-                            slotHint = param.args[0];
-                        } else {
-                            slotHint = Reflects.getFieldOrNull(param.thisObject, "mSlotId");
+                        int slot = slotHintOf(param);
+                        Object raw = param.getResult();
+                        if ("isCiwlanAvailable".equals(method) && slot == Const.SLOT_TARGET) {
+                            if (raw instanceof Boolean) {
+                                rawCiwlanSlot1 = (Boolean) raw;
+                            }
+                            if (Prefs.fn3ShouldRun(ctx) && !Boolean.TRUE.equals(raw)) {
+                                param.setResult(true);
+                                LogX.i(cls + "." + method + "(slotHint=" + slot + ") raw=" + raw
+                                        + " forced=true (runtime-only)");
+                                return;
+                            }
                         }
-                        LogX.i(cls + "." + method + "(slotHint=" + slotHint + ")=" + param.getResult());
+                        LogX.i(cls + "." + method + "(slotHint=" + slot + ")=" + param.getResult());
                     }
                 });
             } catch (Throwable t) {
@@ -185,7 +236,18 @@ final class QtiPhoneHooks {
         }
     }
 
-    private static void hookCallbackBooleans(ClassLoader cl) {
+    private static int slotHintOf(XC_MethodHook.MethodHookParam param) {
+        if (param.args != null && param.args.length > 0 && param.args[0] instanceof Integer) {
+            return (Integer) param.args[0];
+        }
+        Object v = Reflects.getFieldOrNull(param.thisObject, "mSlotId");
+        if (v instanceof Integer) {
+            return (Integer) v;
+        }
+        return -1;
+    }
+
+    private static void hookCallbackBooleans(ClassLoader cl, Context ctx) {
         Class<?> listener = Reflects.findOrNull(cl, "com.qti.extphone.ExtPhoneCallbackListener");
         if (listener == null) {
             return;
@@ -194,8 +256,18 @@ final class QtiPhoneHooks {
             XposedHelpers.findAndHookMethod(listener, "onCiwlanAvailable", int.class, boolean.class,
                     new XC_MethodHook() {
                         @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            LogX.i("onCiwlanAvailable slot=" + param.args[0] + " available=" + param.args[1]);
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            int slot = param.args[0] instanceof Integer ? (Integer) param.args[0] : -1;
+                            boolean raw = Boolean.TRUE.equals(param.args[1]);
+                            if (slot == Const.SLOT_TARGET) {
+                                rawCiwlanSlot1 = raw;
+                            }
+                            if (slot == Const.SLOT_TARGET && !raw && Prefs.fn3ShouldRun(ctx)) {
+                                param.args[1] = true;
+                                LogX.i("onCiwlanAvailable slot=" + slot + " raw=" + raw + " forced=true");
+                                return;
+                            }
+                            LogX.i("onCiwlanAvailable slot=" + slot + " available=" + param.args[1]);
                         }
                     });
         } catch (Throwable t) {

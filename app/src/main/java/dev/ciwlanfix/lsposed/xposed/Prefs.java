@@ -63,6 +63,23 @@ final class Prefs {
         }
     }
 
+    static boolean fn3ShouldRun(Context ctx) {
+        if (ctx == null) {
+            return false;
+        }
+        String mode = fn3Mode(ctx);
+        if (Const.FN3_OFF.equals(mode)) {
+            return false;
+        }
+        if (crossSimCall1(ctx) != 1) {
+            return false;
+        }
+        if (WifiAssoc.associated(ctx)) {
+            return false;
+        }
+        return Const.FN3_ON.equals(mode) || fn2On(ctx);
+    }
+
     static boolean writeGlobal(Context ctx, String key, String value) {
         if (ctx == null) {
             return false;

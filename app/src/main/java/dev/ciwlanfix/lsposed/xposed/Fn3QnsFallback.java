@@ -73,6 +73,8 @@ final class Fn3QnsFallback {
             }
         }
         hookIwlanPreferred(cl);
+        hookWlanRegistration(cl);
+        hookSetupDataCall(cl);
         startInjector();
     }
 
@@ -208,7 +210,7 @@ final class Fn3QnsFallback {
                     LogX.e("[FN3] inject failed", t);
                 }
                 if (injectHandler != null) {
-                    injectHandler.postDelayed(this, 5000L);
+                    injectHandler.postDelayed(this, 8000L);
                 }
             }
         });
@@ -228,11 +230,14 @@ final class Fn3QnsFallback {
             XposedHelpers.callMethod(provider, "updateQualifiedNetworkTypes", Const.APN_TYPE_IMS, iwlan);
             XposedHelpers.callMethod(provider, "updateQualifiedNetworkTypes", APN_MASK_SLOT0_STYLE,
                     new ArrayList<>(iwlan));
-            latched = true;
-            if (appCtx != null) {
-                Prefs.writeGlobal(appCtx, Const.G_FN3_LATCHED, "1");
-                Prefs.writeGlobal(appCtx, Const.G_QNS_SLOT1_IMS_PREF, "5");
+            try {
+                XposedHelpers.callMethod(provider, "reconnectQualifiedNetworkType",
+                        Const.APN_TYPE_IMS, Const.ACCESS_NETWORK_IWLAN);
+            } catch (Throwable t) {
+                LogX.w("[FN3] reconnectQualifiedNetworkType: " + t);
             }
+            latched = true;
+            publishStatus("5", "1", "home", null);
             LogX.i("[FN3] injected slot1 IMS/APN mask networks=[5] via " + provider.getClass().getName());
         } catch (Throwable t) {
             LogX.e("[FN3] inject updateQualifiedNetworkTypes failed", t);
@@ -240,30 +245,8 @@ final class Fn3QnsFallback {
     }
 
     private static boolean shouldInject() {
-        if (appCtx == null) {
-            return false;
-        }
-        String mode = Prefs.fn3Mode(appCtx);
-        if (Const.FN3_OFF.equals(mode)) {
-            return false;
-        }
-        if (Prefs.crossSimCall1(appCtx) != 1) {
-            logSame("[FN3] inject skip: cross_sim_call_1 != 1");
-            return false;
-        }
-        if (WifiAssoc.associated(appCtx)) {
-            logSame("[FN3] inject skip: Wi-Fi associated");
-            return false;
-        }
-        if (Const.FN3_ON.equals(mode)) {
-            return true;
-        }
-        if (!Prefs.fn2On(appCtx)) {
-            return false;
-        }
-        String availRaw = Prefs.readGlobal(appCtx, Const.G_SLOT1_CIWLAN_AVAILABLE);
-        if (availRaw != null && Prefs.parseBool(availRaw, false)) {
-            logSame("[FN3] inject skip: isCiwlanAvailable(1)=true");
+        if (!Prefs.fn3ShouldRun(appCtx)) {
+            logSame("[FN3] inject skip: fn3ShouldRun=false");
             return false;
         }
         return true;
@@ -299,11 +282,10 @@ final class Fn3QnsFallback {
             LogX.i("[FN3] before slot=" + slot + " apnTypes=" + apn + " networks=" + before);
 
             if (slot == Const.SLOT_TARGET && (apn & Const.APN_TYPE_IMS) != 0 && !before.isEmpty()) {
-                Prefs.writeGlobal(appCtx, Const.G_QNS_SLOT1_IMS_PREF, String.valueOf(before.get(0)));
                 if (before.get(0) == Const.ACCESS_NETWORK_EUTRAN) {
                     seenQns3 = true;
-                    Prefs.writeGlobal(appCtx, Const.G_SEEN_QNS3, "1");
                 }
+                publishStatus(String.valueOf(before.get(0)), latched ? "1" : null, null, null);
             }
 
             if (!shouldRewrite(slot, apn)) {
@@ -332,51 +314,16 @@ final class Fn3QnsFallback {
         if ((apn & Const.APN_TYPE_IMS) == 0) {
             return false;
         }
-        if (appCtx == null) {
-            return false;
-        }
-        String mode = Prefs.fn3Mode(appCtx);
-        if (Const.FN3_OFF.equals(mode)) {
-            logSame("[FN3] off, pass-through");
-            return false;
-        }
-        if (Prefs.crossSimCall1(appCtx) != 1) {
-            logSame("[FN3] skip: cross_sim_call_1 != 1");
-            return false;
-        }
-        if (WifiAssoc.associated(appCtx)) {
-            logSame("[FN3] skip: Wi-Fi associated");
+        if (!Prefs.fn3ShouldRun(appCtx)) {
+            logSame("[FN3] rewrite skip: fn3ShouldRun=false");
             latched = false;
-            Prefs.writeGlobal(appCtx, Const.G_FN3_LATCHED, "0");
             return false;
         }
-        if (Const.FN3_ON.equals(mode)) {
-            return true;
+        if (!latched) {
+            latched = true;
+            LogX.i("[FN3] latch: rewriting slot1 IMS to IWLAN=5");
         }
-        if (!Prefs.fn2On(appCtx)) {
-            logSame("[FN3] auto skip: Function 2 is off");
-            latched = false;
-            Prefs.writeGlobal(appCtx, Const.G_FN3_LATCHED, "0");
-            return false;
-        }
-        String availRaw = Prefs.readGlobal(appCtx, Const.G_SLOT1_CIWLAN_AVAILABLE);
-        boolean availKnownTrue = availRaw != null && Prefs.parseBool(availRaw, false);
-        boolean seen3 = seenQns3 || Prefs.readGlobalInt(appCtx, Const.G_SEEN_QNS3, 0) == 1;
-        boolean nowLatched = latched || Prefs.readGlobalInt(appCtx, Const.G_FN3_LATCHED, 0) == 1;
-        if (availKnownTrue) {
-            logSame("[FN3] auto skip: isCiwlanAvailable(1)=true, QNS fallback not needed");
-            return false;
-        }
-        if (nowLatched || seen3) {
-            if (!latched) {
-                latched = true;
-                Prefs.writeGlobal(appCtx, Const.G_FN3_LATCHED, "1");
-                LogX.i("[FN3] auto latch: FN2 on, isCiwlanAvailable(1) not true, QNS slot1 IMS was 3");
-            }
-            return true;
-        }
-        logSame("[FN3] auto wait: ciwlanAvailableRaw=" + availRaw + " seenPref3=" + seen3);
-        return false;
+        return true;
     }
 
     private static void logSame(String msg) {
@@ -483,6 +430,204 @@ final class Fn3QnsFallback {
                     }
                 }
             }
+        }
+    }
+
+    private static void hookWlanRegistration(ClassLoader cl) {
+        String[] names = new String[]{
+                "android.telephony.NetworkService$NetworkServiceProvider",
+                "vendor.qti.iwlan.IWlanNetworkService$IWlanNetworkServiceProvider",
+                "vendor.qti.iwlan.IWlanAidlClient",
+        };
+        for (String n : names) {
+            Class<?> c = Reflects.findOrNull(cl, n);
+            if (c == null) {
+                continue;
+            }
+            for (Method m : c.getDeclaredMethods()) {
+                String name = m.getName();
+                if ("getNetworkRegistrationInfo".equals(name)
+                        || (m.getReturnType() != null
+                        && m.getReturnType().getName().contains("NetworkRegistrationInfo"))) {
+                    hookGetNri(m);
+                } else if ("getDataRegistrationStateResponse".equals(name)
+                        || "networkRegistrationStateChangeIndication".equals(name)) {
+                    hookRegStateResult(m);
+                }
+            }
+        }
+    }
+
+    private static void hookGetNri(Method m) {
+        try {
+            XposedBridge.hookMethod(m, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!Prefs.fn3ShouldRun(appCtx)) {
+                        return;
+                    }
+                    int slot = slotOf(param.thisObject);
+                    if (slot != Const.SLOT_TARGET) {
+                        return;
+                    }
+                    Integer domain = null;
+                    Integer transport = null;
+                    if (param.args != null) {
+                        for (Object a : param.args) {
+                            if (a instanceof Integer) {
+                                if (domain == null) {
+                                    domain = (Integer) a;
+                                } else {
+                                    transport = (Integer) a;
+                                }
+                            }
+                        }
+                    }
+                    if (domain != null && domain != 2) {
+                        return;
+                    }
+                    if (transport != null && transport != 2) {
+                        return;
+                    }
+                    Object current = param.getResult();
+                    if (current != null && transport == null) {
+                        try {
+                            Object t = XposedHelpers.callMethod(current, "getTransportType");
+                            if (t instanceof Integer && (Integer) t != 2) {
+                                return;
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    Object fake = homeWlanNri(param.thisObject.getClass().getClassLoader());
+                    if (fake != null) {
+                        param.setResult(fake);
+                        publishStatus(null, "1", "home", null);
+                        logSame("[FN3] getNetworkRegistrationInfo slot1 WLAN forced HOME/IWLAN");
+                    }
+                }
+            });
+            LogX.i("[FN3] hook " + m.getDeclaringClass().getName() + "." + m.getName());
+        } catch (Throwable t) {
+            LogX.w("[FN3] hook getNetworkRegistrationInfo: " + t);
+        }
+    }
+
+    private static void hookRegStateResult(Method m) {
+        try {
+            XposedBridge.hookMethod(m, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (!Prefs.fn3ShouldRun(appCtx) || param.args == null) {
+                        return;
+                    }
+                    int slot = slotOf(param.thisObject);
+                    if (slot != Const.SLOT_TARGET && slot != -1) {
+                        return;
+                    }
+                    if (slot == -1) {
+                        return;
+                    }
+                    for (Object a : param.args) {
+                        if (a != null && Reflects.findField(a.getClass(), "regState") != null) {
+                            Object old = Reflects.getFieldOrNull(a, "regState");
+                            Reflects.setField(a, "regState", 1);
+                            logSame("[FN3] HAL IWlanDataRegStateResult.regState " + old + " -> 1 (HOME)");
+                            publishStatus(null, "1", "home", null);
+                        }
+                    }
+                }
+            });
+            LogX.i("[FN3] hook " + m.getDeclaringClass().getName() + "." + m.getName());
+        } catch (Throwable t) {
+            LogX.w("[FN3] hook " + m.getName() + ": " + t);
+        }
+    }
+
+    private static void hookSetupDataCall(ClassLoader cl) {
+        String[] names = new String[]{
+                "vendor.qti.iwlan.IWlanDataService$IWlanDataServiceProvider",
+                "vendor.qti.iwlan.IWlanDataService",
+                "android.telephony.data.DataService$DataServiceProvider",
+        };
+        for (String n : names) {
+            Class<?> c = Reflects.findOrNull(cl, n);
+            if (c == null) {
+                continue;
+            }
+            for (Method m : c.getDeclaredMethods()) {
+                if (!"setupDataCall".equals(m.getName())) {
+                    continue;
+                }
+                try {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            int slot = slotOf(param.thisObject);
+                            LogX.i("[FN3] setupDataCall slot=" + slot
+                                    + " args=" + Arrays.toString(param.args));
+                            if (slot == Const.SLOT_TARGET) {
+                                publishStatus("5", "1", "home", "called");
+                            }
+                        }
+
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            int slot = slotOf(param.thisObject);
+                            if (slot == Const.SLOT_TARGET) {
+                                LogX.i("[FN3] setupDataCall slot1 returned " + param.getResult());
+                            }
+                        }
+                    });
+                    LogX.i("[FN3] hook " + n + ".setupDataCall" + Arrays.toString(m.getParameterTypes()));
+                } catch (Throwable t) {
+                    LogX.w("[FN3] hook setupDataCall: " + t);
+                }
+            }
+        }
+    }
+
+    private static Object homeWlanNri(ClassLoader cl) {
+        try {
+            Class<?> builder = Reflects.find(cl, "android.telephony.NetworkRegistrationInfo$Builder");
+            Object b = XposedHelpers.newInstance(builder);
+            XposedHelpers.callMethod(b, "setDomain", 2);
+            XposedHelpers.callMethod(b, "setTransportType", 2);
+            XposedHelpers.callMethod(b, "setRegistrationState", 1);
+            XposedHelpers.callMethod(b, "setAccessNetworkTechnology", 18);
+            try {
+                XposedHelpers.callMethod(b, "setAvailableServices", Arrays.asList(1, 2, 3));
+            } catch (Throwable ignored) {
+            }
+            return XposedHelpers.callMethod(b, "build");
+        } catch (Throwable t) {
+            LogX.w("[FN3] build HOME WLAN NRI: " + t);
+            return null;
+        }
+    }
+
+    private static void publishStatus(String qns, String latchedVal, String wlan, String setup) {
+        if (appCtx == null) {
+            return;
+        }
+        try {
+            android.content.Intent i = new android.content.Intent(Const.ACTION_FN3_STATUS);
+            i.setPackage(Const.PKG_QTI_PHONE);
+            if (qns != null) {
+                i.putExtra("qns", qns);
+            }
+            if (latchedVal != null) {
+                i.putExtra("latched", latchedVal);
+            }
+            if (wlan != null) {
+                i.putExtra("wlan", wlan);
+            }
+            if (setup != null) {
+                i.putExtra("setup", setup);
+            }
+            appCtx.sendBroadcast(i);
+        } catch (Throwable t) {
+            LogX.w("[FN3] publish status: " + t);
         }
     }
 }

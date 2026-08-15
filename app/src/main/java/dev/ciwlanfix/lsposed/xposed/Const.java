@@ -44,6 +44,9 @@ final class Const {
     static final String G_QNS_SLOT1_IMS_PREF = "ciwlan_fix_qns_slot1_ims_pref";
     static final String G_FN3_LATCHED = "ciwlan_fix_fn3_latched";
     static final String G_SEEN_QNS3 = "ciwlan_fix_seen_qns_slot1_pref3";
+    static final String G_FN3_WLAN_REG = "ciwlan_fix_fn3_wlan_reg";
+    static final String G_FN3_SETUP = "ciwlan_fix_fn3_setup";
+    static final String ACTION_FN3_STATUS = "dev.ciwlanfix.lsposed.FN3_STATUS";
 
     static final String FN3_AUTO = "auto";
     static final String FN3_ON = "on";

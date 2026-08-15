@@ -85,8 +85,9 @@ final class ExtPhoneGateway {
     private void start() {
         handler.post(this::connect);
         handler.postDelayed(this::pollConnected, 1500L);
-        QtiPhoneHooks.installBooleanLoggers(cl);
+        QtiPhoneHooks.installBooleanLoggers(cl, ctx);
         QtiPhoneHooks.installComparePreferencesGuard(cl, ctx);
+        QtiPhoneHooks.registerFn3StatusReceiver(ctx);
         Fn1ForceOos.install(this);
         handler.postDelayed(() -> Fn2CiwlanPref.installWatcher(this), 800L);
     }
