@@ -147,9 +147,9 @@ final class Fn1ForceOos {
             return "null";
         }
         return "state=" + ss.getState()
-                + " voice=" + ss.getVoiceRegState()
-                + " data=" + ss.getDataRegState()
-                + " emergencyOnly=" + ss.isEmergencyOnly()
+                + " voice=" + invokeSs(ss, "getVoiceRegState")
+                + " data=" + invokeSs(ss, "getDataRegState")
+                + " emergencyOnly=" + emergencyOnly(ss)
                 + " op=" + ss.getOperatorNumeric()
                 + " raw=" + ss;
     }
@@ -161,7 +161,23 @@ final class Fn1ForceOos {
         int state = ss.getState();
         return state == ServiceState.STATE_OUT_OF_SERVICE
                 || state == ServiceState.STATE_EMERGENCY_ONLY
-                || ss.isEmergencyOnly();
+                || emergencyOnly(ss);
+    }
+
+    private static boolean emergencyOnly(ServiceState ss) {
+        Object v = invokeSs(ss, "isEmergencyOnly");
+        if (v instanceof Boolean) {
+            return (Boolean) v;
+        }
+        return ss.getState() == ServiceState.STATE_EMERGENCY_ONLY;
+    }
+
+    private static Object invokeSs(ServiceState ss, String name) {
+        try {
+            return ServiceState.class.getMethod(name).invoke(ss);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static void applyManual(String why) {
