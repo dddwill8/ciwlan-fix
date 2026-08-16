@@ -165,4 +165,4 @@ JDK 17、compileSdk 36。没有 SDK 就 push `main`，用 GitHub Actions。
 
 ## License
 
-Copyright © 2026 dddwill8. 未授权许可；转载或二次分发请先问作者。
+[MIT](LICENSE) © 2026 dddwill8
