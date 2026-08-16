@@ -4,10 +4,7 @@ import android.app.Activity;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
-import android.widget.RadioGroup;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -25,10 +22,7 @@ public final class SettingsActivity extends Activity {
     private static final String G_FN3 = "ciwlan_fix_force_qns_iwlan_fallback";
 
     private SharedPreferences prefs;
-    private Switch fn1;
-    private Switch fn2;
-    private EditText plmn;
-    private RadioGroup fn3;
+    private Switch master;
     private boolean globalOk = true;
 
     @Override
@@ -37,34 +31,17 @@ public final class SettingsActivity extends Activity {
         setContentView(R.layout.activity_settings);
         prefs = getSharedPreferences(PREF_FILE, MODE_PRIVATE);
 
-        fn1 = findViewById(R.id.fn1_switch);
-        fn2 = findViewById(R.id.fn2_switch);
-        plmn = findViewById(R.id.fn1_plmn);
-        fn3 = findViewById(R.id.fn3_group);
-        Button restore = findViewById(R.id.restore);
+        master = findViewById(R.id.master_switch);
         Button refresh = findViewById(R.id.refresh_status);
 
-        fn1.setChecked(readInitialBool(G_FN1, K_FN1, false));
-        fn2.setChecked(readInitialBool(G_FN2, K_FN2, true));
-        plmn.setText(readInitialString(G_PLMN, K_PLMN, "99999"));
-        String mode = normalizeFn3(readInitialString(G_FN3, K_FN3, "auto"));
-        if ("on".equals(mode)) {
-            fn3.check(R.id.fn3_on);
-        } else if ("off".equals(mode)) {
-            fn3.check(R.id.fn3_off);
-        } else {
-            fn3.check(R.id.fn3_auto);
-        }
-
-        fn1.setOnCheckedChangeListener((v, checked) -> persist());
-        fn2.setOnCheckedChangeListener((v, checked) -> persist());
-        fn3.setOnCheckedChangeListener((g, id) -> persist());
-        plmn.setOnFocusChangeListener((v, hasFocus) -> {
-            if (!hasFocus) {
-                persist();
+        master.setChecked(readMasterOn());
+        master.setOnCheckedChangeListener((v, checked) -> {
+            persist();
+            if (!checked) {
+                Toast.makeText(this, R.string.restore_done, Toast.LENGTH_LONG).show();
             }
+            refreshStatus();
         });
-        restore.setOnClickListener(this::onRestore);
         refresh.setOnClickListener(v -> refreshStatus());
         persist();
         refreshStatus();
@@ -82,8 +59,15 @@ public final class SettingsActivity extends Activity {
         persist();
     }
 
+    private boolean readMasterOn() {
+        boolean fn2 = readInitialBool(G_FN2, K_FN2, true);
+        String fn3 = normalizeFn3(readInitialString(G_FN3, K_FN3, "auto"));
+        return fn2 && !"off".equals(fn3);
+    }
+
     private void refreshStatus() {
-        TextView tv = findViewById(R.id.runtime_status);
+        TextView plain = findViewById(R.id.runtime_status);
+        TextView pro = findViewById(R.id.pro_log);
         String fn2Done = dash(readGlobal("ciwlan_fix_fn2_done"));
         String avail = dash(readGlobal("ciwlan_fix_slot1_ciwlan_available"));
         String epdg = dash(readGlobal("ciwlan_fix_slot1_epdg_over_cellular"));
@@ -93,13 +77,21 @@ public final class SettingsActivity extends Activity {
         String setup = dash(readGlobal("ciwlan_fix_fn3_setup"));
         String cross = dash(readGlobal("cross_sim_call_1"));
         String crossSub = dash(readGlobal("ciwlan_fix_cross_sim_sub1"));
-        if ("—".equals(fn2Done) && "—".equals(avail) && "—".equals(qns)) {
-            tv.setText(R.string.status_empty);
-            return;
+
+        if ("—".equals(fn2Done) && "—".equals(avail) && "—".equals(crossSub)) {
+            plain.setText(R.string.status_empty);
+        } else {
+            plain.setText("总开关：" + (master.isChecked() ? "开" : "关（正在还原）")
+                    + "\n系统通话辅助：" + yn(cross)
+                    + "\n卡 2 跨卡通话：" + yn(crossSub)
+                    + "\n卡 2 CIWLAN 已下发：" + yn(fn2Done)
+                    + "\nmodem CIWLAN 可用：" + yn(avail)
+                    + "\nePDG over cellular：" + yn(epdg));
         }
-        tv.setText("cross_sim_call_1=" + cross + "  sub1=" + crossSub
+
+        pro.setText("cross_sim_call_1=" + cross + "  sub1=" + crossSub
                 + "\nfn2_done=" + fn2Done
-                + "\nisCiwlanAvailable(1)=" + avail + "  (modem raw)"
+                + "\nisCiwlanAvailable(1) raw=" + avail
                 + "\nisEpdgOverCellular(1)=" + epdg
                 + "\nQNS slot1 IMS pref=" + qns + "  (3=EUTRAN, 5=IWLAN)"
                 + "\nfn3_latched=" + fn3
@@ -107,40 +99,37 @@ public final class SettingsActivity extends Activity {
                 + "\nfn3_setup=" + setup);
     }
 
+    private static String yn(String v) {
+        if (v == null || "—".equals(v)) {
+            return "未知";
+        }
+        String s = v.trim();
+        if ("1".equals(s) || "true".equalsIgnoreCase(s)) {
+            return "是";
+        }
+        if ("0".equals(s) || "false".equalsIgnoreCase(s)) {
+            return "否";
+        }
+        return s;
+    }
+
     private static String dash(String v) {
         return (v == null || v.trim().isEmpty()) ? "—" : v.trim();
     }
 
-    private void onRestore(View v) {
-        fn1.setChecked(false);
-        fn2.setChecked(false);
-        fn3.check(R.id.fn3_off);
-        persist();
-        Toast.makeText(this, R.string.restore_done, Toast.LENGTH_LONG).show();
-    }
-
     private void persist() {
-        String plmnValue = plmn.getText() == null ? "99999" : plmn.getText().toString().trim();
-        if (plmnValue.isEmpty()) {
-            plmnValue = "99999";
-        }
-        String fn3Value = "auto";
-        int id = fn3.getCheckedRadioButtonId();
-        if (id == R.id.fn3_on) {
-            fn3Value = "on";
-        } else if (id == R.id.fn3_off) {
-            fn3Value = "off";
-        }
+        boolean on = master.isChecked();
+        String fn3Value = on ? "auto" : "off";
         prefs.edit()
-                .putBoolean(K_FN1, fn1.isChecked())
-                .putBoolean(K_FN2, fn2.isChecked())
-                .putString(K_PLMN, plmnValue)
+                .putBoolean(K_FN1, on)
+                .putBoolean(K_FN2, on)
+                .putString(K_PLMN, "99999")
                 .putString(K_FN3, fn3Value)
                 .apply();
         boolean ok = true;
-        ok &= writeGlobal(G_FN1, fn1.isChecked() ? "1" : "0");
-        ok &= writeGlobal(G_FN2, fn2.isChecked() ? "1" : "0");
-        ok &= writeGlobal(G_PLMN, plmnValue);
+        ok &= writeGlobal(G_FN1, on ? "1" : "0");
+        ok &= writeGlobal(G_FN2, on ? "1" : "0");
+        ok &= writeGlobal(G_PLMN, "99999");
         ok &= writeGlobal(G_FN3, fn3Value);
         if (ok != globalOk) {
             globalOk = ok;

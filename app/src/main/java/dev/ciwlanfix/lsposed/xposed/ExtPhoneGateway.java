@@ -234,10 +234,14 @@ final class ExtPhoneGateway {
             LogX.i("slot " + slot
                     + " isEpdgOverCellularDataSupported=" + epdg
                     + " isCiwlanAvailable=" + avail
+                    + " raw=" + (slot == Const.SLOT_TARGET ? QtiPhoneHooks.rawCiwlanSlot1() : "n/a")
                     + " getCiwlanConfig=" + describeConfig(cfg)
                     + " getCiwlanModeUserPreference=" + describeConfig(pref));
             if (slot == Const.SLOT_TARGET) {
-                Prefs.writeGlobal(ctx, Const.G_SLOT1_CIWLAN_AVAILABLE, String.valueOf(Boolean.TRUE.equals(avail)));
+                Boolean raw = QtiPhoneHooks.rawCiwlanSlot1();
+                if (raw != null) {
+                    Prefs.writeGlobal(ctx, Const.G_SLOT1_CIWLAN_AVAILABLE, raw ? "1" : "0");
+                }
                 Prefs.writeGlobal(ctx, Const.G_SLOT1_EPDG_CELL, String.valueOf(Boolean.TRUE.equals(epdg)));
             }
         } catch (Throwable t) {

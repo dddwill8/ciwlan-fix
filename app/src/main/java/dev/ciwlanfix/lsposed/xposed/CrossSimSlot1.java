@@ -41,7 +41,10 @@ final class CrossSimSlot1 {
         try {
             Boolean before = (Boolean) Reflects.callOrNull(mgr, "isCrossSimCallingEnabled");
             if (Boolean.valueOf(enable).equals(before)) {
-                Prefs.writeGlobal(ctx, Const.G_CROSS_SIM_SUB1, enable ? "1" : "0");
+                String want = enable ? "1" : "0";
+                if (!want.equals(Prefs.readGlobal(ctx, Const.G_CROSS_SIM_SUB1))) {
+                    Prefs.writeGlobal(ctx, Const.G_CROSS_SIM_SUB1, want);
+                }
                 return;
             }
             Reflects.call(mgr, "setCrossSimCallingEnabled", enable);

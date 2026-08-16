@@ -2,5 +2,6 @@
 <resources>
     <string-array name="xposed_scope">
         <item>com.qti.phone</item>
+        <item>vendor.qti.iwlan</item>
     </string-array>
 </resources>

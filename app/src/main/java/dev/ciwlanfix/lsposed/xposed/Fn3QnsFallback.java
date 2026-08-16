@@ -229,6 +229,10 @@ final class Fn3QnsFallback {
         if (!shouldInject()) {
             return;
         }
+        if (latched) {
+            logSame("[FN3] inject skip: already latched");
+            return;
+        }
         Object provider = PROVIDERS.get(Const.SLOT_TARGET);
         if (provider == null) {
             logSame("[FN3] inject wait: no slot1 NetworkAvailabilityProvider yet keys=" + PROVIDERS.keySet());
@@ -247,7 +251,7 @@ final class Fn3QnsFallback {
             }
             latched = true;
             publishStatus("5", "1", "home", null);
-            LogX.i("[FN3] injected slot1 IMS/APN mask networks=[5] via " + provider.getClass().getName());
+            logSame("[FN3] injected slot1 IMS/APN mask networks=[5] via " + provider.getClass().getName());
         } catch (Throwable t) {
             LogX.e("[FN3] inject updateQualifiedNetworkTypes failed", t);
         }
@@ -255,6 +259,7 @@ final class Fn3QnsFallback {
 
     private static boolean shouldInject() {
         if (!Prefs.fn3ShouldRun(appCtx)) {
+            latched = false;
             logSame("[FN3] inject skip: fn3ShouldRun=false");
             return false;
         }
@@ -288,6 +293,12 @@ final class Fn3QnsFallback {
             int apn = apnOf(param.args);
             Object networksArg = networksOf(param.args);
             List<Integer> before = toIntList(networksArg);
+            if (slot == Const.SLOT_TARGET && (apn & Const.APN_TYPE_IMS) != 0 && !before.isEmpty()
+                    && before.get(0) == Const.ACCESS_NETWORK_IWLAN) {
+                latched = true;
+                logSame("[FN3] already [5] slot=" + slot + " apnTypes=" + apn);
+                return;
+            }
             LogX.i("[FN3] before slot=" + slot + " apnTypes=" + apn + " networks=" + before);
 
             if (slot == Const.SLOT_TARGET && (apn & Const.APN_TYPE_IMS) != 0 && !before.isEmpty()) {
@@ -309,7 +320,7 @@ final class Fn3QnsFallback {
                 }
             }
             writeNetworks(param.args, networksArg, after);
-            LogX.i("[FN3] after  slot=" + slot + " apnTypes=" + apn + " networks=" + after
+            logSame("[FN3] after  slot=" + slot + " apnTypes=" + apn + " networks=" + after
                     + " (IMS forced IWLAN=5, runtime-only)");
         } catch (Throwable t) {
             LogX.e("[FN3] updateQualifiedNetworkTypes hook failed", t);

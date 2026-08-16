@@ -60,6 +60,7 @@ final class Const {
     static final long FN1_MAX_BACKOFF_MS = 120_000L;
     static final long PREF_POLL_MS = 2_000L;
     static final long FN2_REQUERY_MS = 1_200L;
+    static final long CROSS_SIM_IDLE_MS = 30_000L;
 
     private Const() {}
 }

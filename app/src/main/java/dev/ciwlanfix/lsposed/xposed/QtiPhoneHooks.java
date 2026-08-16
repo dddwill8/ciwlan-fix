@@ -318,7 +318,7 @@ final class QtiPhoneHooks {
                         return;
                     }
                     if (slot == Const.SLOT_TARGET && Prefs.fn2On(ctx)) {
-                        LogX.i("[FN2] skip comparePreferences(slot=1) while enforcing ONLY/ONLY");
+                        LogX.i("[FN2] skip comparePreferences(slot=1) while FN2 on");
                         Class<?> rt = void.class;
                         if (param.method instanceof Method) {
                             rt = ((Method) param.method).getReturnType();

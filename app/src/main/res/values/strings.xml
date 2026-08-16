@@ -1,25 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CIWLAN Fix</string>
-    <string name="xposed_description">Runtime-only Cross-SIM / CIWLAN helper for slot 1. Never writes partitions, NV, QCN, or SIM FPLMN.</string>
-    <string name="safety_banner">假回锁设备：本模块只做运行时 Hook 与公开/隐藏电话 API。禁止刷写任何分区、禁止 Magisk overlay、禁止 QCN/EFS/NV、禁止写 SIM FPLMN。关模块 + 关开关必须能还原。</string>
-    <string name="fn1_title">功能 1 · 强制卡 2 / slot 1 无服务</string>
-    <string name="fn1_summary">用手动选网到无效 PLMN（persist=false）复现「无服务 / 仅紧急呼叫」。默认关，仅作复现辅助。</string>
-    <string name="fn1_plmn">无效 PLMN（默认 99999）</string>
-    <string name="fn2_title">功能 2 · slot 1 CIWLAN = ONLY/ONLY</string>
-    <string name="fn2_summary">只改 slot 1 的 QTI CiwlanModeUserPreference。绝不改 slot 0，也不写全局 CELLULAR_I_WLAN_PREFERENCE_STATE_KEY。</string>
-    <string name="fn3_title">功能 3 · QNS IWLAN 回退</string>
-    <string name="fn3_summary">功能 2 之后若仍无跨卡 ePDG：把 slot1 QNS IMS 改成 5(IWLAN)，并把 WLAN PS 报成已注册，促使框架发起 setupDataCall。不写分区/NV。</string>
-    <string name="fn3_auto">自动回退（默认）</string>
-    <string name="fn3_on">强制开启</string>
-    <string name="fn3_off">关闭</string>
-    <string name="status_title">运行状态（看这个，不要只看「无服务」）</string>
-    <string name="status_empty">还没读到宿主写入的状态。常见原因：LSPosed 没勾 com.qti.phone / vendor.qti.iwlan，或还没重启。</string>
-    <string name="refresh_status">刷新运行状态</string>
-    <string name="restore">关闭全部功能并还原 slot 1</string>
-    <string name="restore_hint">先等 logcat 出现 restored，再去 LSPosed 禁用模块并重启。</string>
-    <string name="logcat_hint">过滤：adb logcat -s CIWLAN_FIX:D\n成功不能只看 UI，必须同时有 ONLY/ONLY、isCiwlanAvailable(1) 或 ePDG-over-cellular、QNS pref=5、以及真实 ePDG/IKE。</string>
-    <string name="grant_hint">若开关无法写入 settings global，在电脑执行：\nadb shell su 0 pm grant dev.ciwlanfix.lsposed android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="xposed_description">让卡 2 在无服务时走卡 1 的数据打电话。只做运行时 Hook，不写分区/NV。</string>
+    <string name="safety_banner">假回锁设备：只改运行时电话接口。禁止刷分区、Magisk overlay、QCN/EFS/NV、写 SIM FPLMN。要停用：先关掉下面的开关等还原，再去 LSPosed 禁用模块。</string>
+    <string name="master_title">卡 2 通话辅助</string>
+    <string name="master_summary">打开后会同时做三件事，缺一不可：锁住卡 2 不驻本地网、把卡 2 的 CIWLAN 设成只走跨卡、并补上 IWLAN 注册。关掉即全部还原。家里连上 Wi-Fi 时会自动改回普通 Wi-Fi 通话。</string>
+    <string name="master_switch">开启卡 2 通话辅助</string>
+    <string name="status_title">现在怎样</string>
+    <string name="status_empty">还没读到运行状态。请确认 LSPosed 勾了 com.qti.phone 和 vendor.qti.iwlan，并已重启。</string>
+    <string name="pro_title">专业日志（给排查用）</string>
+    <string name="refresh_status">刷新</string>
+    <string name="logcat_hint">电脑上看完整日志：adb logcat -s CIWLAN_FIX:D</string>
+    <string name="grant_hint">若开关写不进去，在电脑执行：\nadb shell su 0 pm grant dev.ciwlanfix.lsposed android.permission.WRITE_SECURE_SETTINGS</string>
     <string name="saved">已保存</string>
-    <string name="restore_done">已关闭全部功能。请立即看 CIWLAN_FIX 日志确认还原，然后再禁用模块。</string>
+    <string name="restore_done">已关闭并开始还原。请看专业日志确认，然后再去 LSPosed 禁用模块。</string>
 </resources>

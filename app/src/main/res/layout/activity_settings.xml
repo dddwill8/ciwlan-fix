@@ -24,101 +24,27 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:text="@string/fn1_title"
+            android:text="@string/master_title"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="@string/fn1_summary"
+            android:text="@string/master_summary"
             android:textSize="13sp" />
 
         <Switch
-            android:id="@+id/fn1_switch"
+            android:id="@+id/master_switch"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="force_oos_slot1" />
+            android:layout_marginTop="12dp"
+            android:text="@string/master_switch" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/fn1_plmn" />
-
-        <EditText
-            android:id="@+id/fn1_plmn"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="99999"
-            android:inputType="number"
-            android:maxLines="1" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/fn2_title"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/fn2_summary"
-            android:textSize="13sp" />
-
-        <Switch
-            android:id="@+id/fn2_switch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="set_ciwlan_only_slot1" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/fn3_title"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/fn3_summary"
-            android:textSize="13sp" />
-
-        <RadioGroup
-            android:id="@+id/fn3_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp">
-
-            <RadioButton
-                android:id="@+id/fn3_auto"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/fn3_auto" />
-
-            <RadioButton
-                android:id="@+id/fn3_on"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/fn3_on" />
-
-            <RadioButton
-                android:id="@+id/fn3_off"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/fn3_off" />
-        </RadioGroup>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="24dp"
             android:text="@string/status_title"
             android:textStyle="bold" />
 
@@ -127,35 +53,35 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:fontFamily="monospace"
             android:text="@string/status_empty"
-            android:textSize="12sp" />
+            android:textSize="15sp" />
 
         <Button
             android:id="@+id/refresh_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="12dp"
             android:text="@string/refresh_status" />
 
-        <Button
-            android:id="@+id/restore"
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/restore" />
+            android:layout_marginTop="24dp"
+            android:text="@string/pro_title"
+            android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/pro_log"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/restore_hint"
-            android:textSize="13sp" />
+            android:fontFamily="monospace"
+            android:textSize="12sp" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="12dp"
             android:text="@string/logcat_hint"
             android:textSize="13sp" />
 

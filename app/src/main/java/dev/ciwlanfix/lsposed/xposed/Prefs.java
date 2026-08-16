@@ -31,7 +31,7 @@ final class Prefs {
     }
 
     static boolean fn1On(Context ctx) {
-        return readBool(ctx, Const.G_FN1, Const.K_FN1, false);
+        return readBool(ctx, Const.G_FN1, Const.K_FN1, true);
     }
 
     static String plmn(Context ctx) {

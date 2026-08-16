@@ -5,6 +5,7 @@ final class Fn2CiwlanPref {
     private static boolean initialized;
     private static boolean appliedOnly;
     private static boolean lastWifiAssoc;
+    private static long lastCrossSyncMs;
     private static ExtPhoneGateway gw;
 
     private Fn2CiwlanPref() {}
@@ -47,7 +48,11 @@ final class Fn2CiwlanPref {
         } else if (on && wifi != lastWifiAssoc) {
             run(wifi ? "wifi-assoc" : "wifi-lost");
         } else {
-            CrossSimSlot1.sync(gw.context(), "fn2-tick");
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (now - lastCrossSyncMs >= Const.CROSS_SIM_IDLE_MS) {
+                lastCrossSyncMs = now;
+                CrossSimSlot1.sync(gw.context(), "fn2-tick");
+            }
         }
         lastFn2 = on;
         lastWifiAssoc = wifi;
