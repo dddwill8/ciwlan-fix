@@ -20,6 +20,9 @@ final class Fn1ForceOos {
     private static long lastApplyMs;
     private static long backoffMs = Const.FN1_MIN_INTERVAL_MS;
     private static boolean restoreOncePending = true;
+    private static boolean firstLockDone;
+    private static final java.util.concurrent.atomic.AtomicBoolean BOOT_RETRY =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private Fn1ForceOos() {}
 
@@ -68,7 +71,11 @@ final class Fn1ForceOos {
             boolean on = Prefs.fn1On(ctx);
             if (on && !lastFn1) {
                 LogX.i("[FN1] toggle ON (" + why + ")");
+                firstLockDone = false;
                 applyManual("toggle-on");
+                startWatch();
+            } else if (on && !firstLockDone) {
+                applyManual("boot-first");
                 startWatch();
             } else if (!on && lastFn1) {
                 LogX.i("[FN1] toggle OFF (" + why + ") -> automatic");
@@ -76,6 +83,7 @@ final class Fn1ForceOos {
                 stopWatch();
                 lastApplyMs = 0L;
                 backoffMs = Const.FN1_MIN_INTERVAL_MS;
+                firstLockDone = false;
             } else if (!on && restoreOncePending) {
                 restoreOncePending = false;
                 LogX.i("[FN1] module loaded with FN1 off -> ensure slot 1 automatic");
@@ -190,7 +198,9 @@ final class Fn1ForceOos {
             return;
         }
         long now = android.os.SystemClock.elapsedRealtime();
-        if (!"toggle-on".equals(why) && now - lastApplyMs < backoffMs) {
+        boolean urgent = "toggle-on".equals(why) || "boot-first".equals(why)
+                || "install".equals(why) || "service-ready".equals(why);
+        if (!urgent && now - lastApplyMs < backoffMs) {
             LogX.i("[FN1] rate-limit skip apply why=" + why
                     + " waitMs=" + (backoffMs - (now - lastApplyMs)));
             return;
@@ -199,6 +209,7 @@ final class Fn1ForceOos {
         TelephonyManager local = tm();
         if (local == null) {
             LogX.skip("[FN1] no TelephonyManager for slot 1");
+            scheduleBootRetry();
             return;
         }
         logSlot1State(ctx, "before apply/" + why);
@@ -206,12 +217,30 @@ final class Fn1ForceOos {
         lastApplyMs = android.os.SystemClock.elapsedRealtime();
         if (ok) {
             backoffMs = Const.FN1_MIN_INTERVAL_MS;
+            firstLockDone = true;
             LogX.i("[FN1] apply manual PLMN=" + plmn + " persist=false slot=1 why=" + why + " ok=true");
+        } else if (urgent) {
+            LogX.e("[FN1] apply failed (" + why + "); retry without backoff");
+            scheduleBootRetry();
         } else {
             backoffMs = Math.min(backoffMs * 2, Const.FN1_MAX_BACKOFF_MS);
             LogX.e("[FN1] apply failed; next backoffMs=" + backoffMs);
         }
         logSlot1State(ctx, "after apply/" + why);
+    }
+
+    private static void scheduleBootRetry() {
+        Handler h = handler();
+        if (h == null || !BOOT_RETRY.compareAndSet(false, true)) {
+            return;
+        }
+        h.postDelayed(() -> {
+            BOOT_RETRY.set(false);
+            Context ctx = context();
+            if (ctx != null && Prefs.fn1On(ctx) && !firstLockDone) {
+                tick("boot-first");
+            }
+        }, 200L);
     }
 
     private static boolean setManualPersistFalse(TelephonyManager local, String plmn) {
@@ -220,7 +249,7 @@ final class Fn1ForceOos {
                     "setNetworkSelectionModeManual", String.class, boolean.class);
             Object r = m.invoke(local, plmn, Boolean.FALSE);
             LogX.i("[FN1] TelephonyManager.setNetworkSelectionModeManual(" + plmn + ", persist=false) -> " + r);
-            return !Boolean.FALSE.equals(r);
+            return true;
         } catch (Throwable t) {
             LogX.e("[FN1] TelephonyManager.setNetworkSelectionModeManual persist=false failed", t);
             LogX.skip("[FN1] ExtTelephonyManager.setNetworkSelectionModeManual has no persist flag "

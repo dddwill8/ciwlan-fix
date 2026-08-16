@@ -88,6 +88,9 @@ final class ExtPhoneGateway {
         QtiPhoneHooks.installBooleanLoggers(cl, ctx);
         QtiPhoneHooks.installComparePreferencesGuard(cl, ctx);
         QtiPhoneHooks.registerFn3StatusReceiver(ctx);
+        CrossSimSlot1.sync(ctx, "qti-start");
+        handler.postDelayed(() -> CrossSimSlot1.sync(ctx, "qti-start-retry"), 400L);
+        handler.postDelayed(() -> CrossSimSlot1.sync(ctx, "qti-start-retry2"), 3000L);
         Fn1ForceOos.install(this);
         handler.postDelayed(() -> Fn2CiwlanPref.installWatcher(this), 800L);
     }
@@ -141,6 +144,7 @@ final class ExtPhoneGateway {
         try {
             dumpBothSlots("onConnected");
             ensureClient();
+            CrossSimSlot1.sync(ctx, "onConnected");
             Fn2CiwlanPref.onServiceReady(this);
             Fn1ForceOos.onServiceReady(this);
         } catch (Throwable t) {

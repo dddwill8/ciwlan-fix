@@ -5,15 +5,27 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 
 final class CrossSimSlot1 {
-    private static Boolean applied;
-
     private CrossSimSlot1() {}
 
-    static void setEnabled(Context ctx, boolean enable, String why) {
+    static boolean shouldEnable(Context ctx) {
+        return Prefs.fn2On(ctx) || Prefs.crossSimCall1(ctx) == 1;
+    }
+
+    static void sync(Context ctx, String why) {
         if (ctx == null) {
             return;
         }
-        if (applied != null && applied == enable) {
+        if (shouldEnable(ctx)) {
+            setEnabled(ctx, true, why);
+            return;
+        }
+        if (Prefs.crossSimCall1(ctx) == 0) {
+            setEnabled(ctx, false, why);
+        }
+    }
+
+    static void setEnabled(Context ctx, boolean enable, String why) {
+        if (ctx == null) {
             return;
         }
         int subId = Slot.subIdSlot1(ctx);
@@ -28,12 +40,12 @@ final class CrossSimSlot1 {
         }
         try {
             Boolean before = (Boolean) Reflects.callOrNull(mgr, "isCrossSimCallingEnabled");
-            if (!Boolean.valueOf(enable).equals(before)) {
-                Reflects.call(mgr, "setCrossSimCallingEnabled", enable);
+            if (Boolean.valueOf(enable).equals(before)) {
+                Prefs.writeGlobal(ctx, Const.G_CROSS_SIM_SUB1, enable ? "1" : "0");
+                return;
             }
+            Reflects.call(mgr, "setCrossSimCallingEnabled", enable);
             Boolean after = (Boolean) Reflects.callOrNull(mgr, "isCrossSimCallingEnabled");
-            boolean ok = Boolean.valueOf(enable).equals(after);
-            applied = ok ? enable : null;
             Prefs.writeGlobal(ctx, Const.G_CROSS_SIM_SUB1, Boolean.TRUE.equals(after) ? "1" : "0");
             LogX.i("[FN2] setCrossSimCallingEnabled(subId=" + subId + "," + enable
                     + ") before=" + before + " after=" + after + " why=" + why);

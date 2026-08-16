@@ -34,6 +34,9 @@ final class Fn3QnsFallback {
         }
         appCtx = ctx.getApplicationContext() != null ? ctx.getApplicationContext() : ctx;
         startInjector();
+        if (injectHandler != null) {
+            injectHandler.post(Fn3QnsFallback::injectSlot1IfNeeded);
+        }
     }
 
     static void install(ClassLoader cl, Context ctx) {
@@ -192,6 +195,12 @@ final class Fn3QnsFallback {
         }
         PROVIDERS.put(slot, provider);
         LogX.i("[FN3] remembered provider slot=" + slot + " total=" + PROVIDERS.keySet());
+        if (slot == Const.SLOT_TARGET) {
+            startInjector();
+            if (injectHandler != null) {
+                injectHandler.post(Fn3QnsFallback::injectSlot1IfNeeded);
+            }
+        }
     }
 
     private static synchronized void startInjector() {
