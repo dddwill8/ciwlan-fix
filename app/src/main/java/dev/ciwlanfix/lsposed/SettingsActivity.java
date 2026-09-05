@@ -80,6 +80,7 @@ public final class SettingsActivity extends Activity {
         String wfcUser = dash(readGlobal("ciwlan_fix_wfc_user"));
         String wfcRoam = dash(readGlobal("ciwlan_fix_wfc_roam"));
         String wfcForce = dash(readGlobal("ciwlan_fix_wfc_force"));
+        String radioOff = dash(readGlobal("ciwlan_fix_fn1_radio_off"));
 
         if ("—".equals(fn2Done) && "—".equals(avail) && "—".equals(crossSub) && "—".equals(wfcUser)) {
             plain.setText(R.string.status_empty);
@@ -91,7 +92,8 @@ public final class SettingsActivity extends Activity {
                     + "\n卡 2 漫游 Wi-Fi 通话：" + yn(wfcRoam)
                     + "\n卡 2 CIWLAN 已下发：" + yn(fn2Done)
                     + "\nmodem CIWLAN 可用：" + yn(avail)
-                    + "\nePDG over cellular：" + yn(epdg));
+                    + "\nePDG over cellular：" + yn(epdg)
+                    + "\n卡 2 射频已关：" + yn(radioOff));
         }
 
         pro.setText("cross_sim_call_1=" + cross + "  sub1=" + crossSub
@@ -102,7 +104,8 @@ public final class SettingsActivity extends Activity {
                 + "\nQNS slot1 IMS pref=" + qns + "  (3=EUTRAN, 5=IWLAN)"
                 + "\nfn3_latched=" + fn3
                 + "\nfn3_wlan_reg=" + wlan
-                + "\nfn3_setup=" + setup);
+                + "\nfn3_setup=" + setup
+                + "\nfn1_radio_off=" + radioOff);
     }
 
     private static String yn(String v) {

@@ -29,6 +29,8 @@ final class Fn1ForceOos {
     private static long backoffMs = Const.FN1_MIN_INTERVAL_MS;
     private static boolean restoreOncePending = true;
     private static boolean firstLockDone;
+    private static boolean radioOffAbort;
+    private static int radioOffFails;
     private static long lastSkipLogMs;
     private static final java.util.concurrent.atomic.AtomicBoolean BOOT_RETRY =
             new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -77,22 +79,26 @@ final class Fn1ForceOos {
             if (on && !lastFn1) {
                 LogX.i("[FN1] toggle ON (" + why + ")");
                 firstLockDone = false;
-                applyManual("toggle-on");
+                radioOffAbort = false;
+                radioOffFails = 0;
+                evaluateRadio("toggle-on");
                 startWatch();
             } else if (on && !firstLockDone) {
-                applyManual("boot-first");
+                evaluateRadio("boot-first");
                 startWatch();
             } else if (!on && lastFn1) {
-                LogX.i("[FN1] toggle OFF (" + why + ") -> automatic");
-                restoreAutomatic("toggle-off");
+                LogX.i("[FN1] toggle OFF (" + why + ") -> radio on + automatic");
+                restoreRadioOn("toggle-off");
                 stopWatch();
                 lastApplyMs = 0L;
                 backoffMs = Const.FN1_MIN_INTERVAL_MS;
                 firstLockDone = false;
+                radioOffAbort = false;
+                radioOffFails = 0;
             } else if (!on && restoreOncePending) {
                 restoreOncePending = false;
-                LogX.i("[FN1] module loaded with FN1 off -> ensure slot 1 automatic");
-                restoreAutomatic("startup-heal");
+                LogX.i("[FN1] module loaded with FN1 off -> radio on + automatic");
+                restoreRadioOn("startup-heal");
             } else if (on && !watching) {
                 startWatch();
             }
@@ -346,19 +352,24 @@ final class Fn1ForceOos {
         }
     }
 
-    private static void applyManual(String why) {
+    private static boolean isPowerOff(ServiceState ss) {
+        return ss != null && ss.getState() == ServiceState.STATE_POWER_OFF;
+    }
+
+    private static void evaluateRadio(String why) {
         Context ctx = context();
-        if (ctx == null) {
+        TelephonyManager local = tm();
+        if (ctx == null || local == null) {
+            scheduleBootRetry();
             return;
         }
         if (Prefs.airplaneOn(ctx)) {
-            LogX.i("[FN1] skip apply: airplane mode on");
+            logSkip("[FN1] skip radio: airplane mode on");
             return;
         }
-        TelephonyManager local = tm();
-        if (local == null) {
-            LogX.skip("[FN1] no TelephonyManager for slot 1");
-            scheduleBootRetry();
+        if (radioOffAbort) {
+            logSkip("[FN1] radio-off aborted earlier; leave slot1 radio on");
+            firstLockDone = true;
             return;
         }
         ServiceState ss = null;
@@ -367,12 +378,27 @@ final class Fn1ForceOos {
         } catch (Throwable t) {
             LogX.w("[FN1] getServiceState: " + t);
         }
-        int sel = selectionMode(local);
-        boolean wwan = wwanRegistered(ss);
-        if (!wwan && isManualSelection(sel)) {
-            firstLockDone = true;
-            LogX.i("[FN1] skip apply: WWAN not registered and already MANUAL why=" + why
-                    + " " + describeSs(ss));
+        if (isPowerOff(ss)) {
+            if (wlanServing(ss)) {
+                firstLockDone = true;
+                publishRadioOff(ctx, true);
+                logSkip("[FN1] slot1 POWER_OFF and IWLAN serving; holding");
+                return;
+            }
+            LogX.w("[FN1] slot1 POWER_OFF but IWLAN down -> radio on (" + why + ")");
+            radioOnAfterImsLost(local, why);
+            return;
+        }
+        if (wlanServing(ss)) {
+            applyRadioOff(local, why);
+            return;
+        }
+        logSkip("[FN1] wait IWLAN before radio off why=" + why + " " + describeSs(ss));
+    }
+
+    private static void applyRadioOff(TelephonyManager local, String why) {
+        Context ctx = context();
+        if (ctx == null || local == null) {
             return;
         }
         long now = android.os.SystemClock.elapsedRealtime();
@@ -383,31 +409,107 @@ final class Fn1ForceOos {
         long localWait = now - lastApplyMs;
         long globalWait = now - globalLast;
         if (localWait < backoffMs || (globalLast > 0L && globalWait < Const.FN1_MIN_INTERVAL_MS)) {
-            firstLockDone = true;
-            LogX.i("[FN1] rate-limit skip apply why=" + why
+            logSkip("[FN1] rate-limit skip radio off why=" + why
                     + " localWaitMs=" + localWait + " globalWaitMs=" + globalWait);
             return;
         }
-        String plmn = Prefs.plmn(ctx);
-        logSlot1State(ctx, "before apply/" + why);
+        logSlot1State(ctx, "before radio-off/" + why);
         Prefs.writeGlobal(ctx, Const.G_FN1_LAST_APPLY_MS, String.valueOf(now));
         lastApplyMs = now;
-        disableRoaming(local);
-        boolean ok = setManualPersistTrue(local, plmn);
-        if (!ok && isManualSelection(selectionMode(local))) {
-            ok = true;
-            LogX.i("[FN1] setNetworkSelectionModeManual returned false; already MANUAL, treat as holding");
+        clearLegacyManual(local, why);
+        boolean ok = setRadioPower(local, false, why);
+        ServiceState after = null;
+        try {
+            after = local.getServiceState();
+        } catch (Throwable ignored) {
         }
         if (ok) {
             backoffMs = Const.FN1_MIN_INTERVAL_MS;
             firstLockDone = true;
-            LogX.i("[FN1] apply manual PLMN=" + plmn + " persist=true slot=1 why=" + why + " ok=true");
+            publishRadioOff(ctx, true);
+            LogX.i("[FN1] setRadioPower(false) slot1 why=" + why + " after=" + describeSs(after));
         } else {
             backoffMs = Math.min(Math.max(backoffMs, Const.FN1_MIN_INTERVAL_MS) * 2, Const.FN1_MAX_BACKOFF_MS);
-            LogX.e("[FN1] apply failed (" + why + "); next backoffMs=" + backoffMs);
+            LogX.e("[FN1] setRadioPower(false) failed (" + why + "); next backoffMs=" + backoffMs);
             scheduleBootRetry();
         }
-        logSlot1State(ctx, "after apply/" + why);
+        logSlot1State(ctx, "after radio-off/" + why);
+    }
+
+    private static void radioOnAfterImsLost(TelephonyManager local, String why) {
+        radioOffFails++;
+        setRadioPower(local, true, "ims-lost/" + why);
+        publishRadioOff(context(), false);
+        firstLockDone = false;
+        if (radioOffFails >= Const.FN1_RADIO_OFF_FAIL_LIMIT) {
+            radioOffAbort = true;
+            firstLockDone = true;
+            LogX.e("[FN1] radio-off dropped IWLAN " + radioOffFails
+                    + " times; abort and leave slot1 radio on");
+        }
+    }
+
+    private static void restoreRadioOn(String why) {
+        Context ctx = context();
+        TelephonyManager local = tm();
+        if (local == null) {
+            LogX.skip("[FN1] restore: no TelephonyManager");
+            return;
+        }
+        logSlot1State(ctx, "before restore/" + why);
+        setRadioPower(local, true, why);
+        publishRadioOff(ctx, false);
+        clearLegacyManual(local, why);
+        logSlot1State(ctx, "after restore/" + why);
+    }
+
+    private static void publishRadioOff(Context ctx, boolean off) {
+        if (ctx == null) {
+            return;
+        }
+        Prefs.writeGlobal(ctx, Const.G_FN1_RADIO_OFF, off ? "1" : "0");
+    }
+
+    private static boolean setRadioPower(TelephonyManager local, boolean on, String why) {
+        if (local == null) {
+            return false;
+        }
+        try {
+            Object[] args = new Object[]{on};
+            Method m = Reflects.match(local.getClass(), "setRadioPower", args);
+            if (m == null) {
+                LogX.e("[FN1] setRadioPower not found");
+                return false;
+            }
+            m.setAccessible(true);
+            m.invoke(local, args);
+            LogX.i("[FN1] setRadioPower(" + on + ") slot1 why=" + why + " ok");
+            return true;
+        } catch (Throwable t) {
+            LogX.e("[FN1] setRadioPower(" + on + ") failed why=" + why, t);
+            return false;
+        }
+    }
+
+    private static void clearLegacyManual(TelephonyManager local, String why) {
+        int sel = selectionMode(local);
+        if (!isManualSelection(sel)) {
+            return;
+        }
+        try {
+            local.setNetworkSelectionModeAutomatic();
+            LogX.i("[FN1] cleared leftover MANUAL -> automatic why=" + why);
+        } catch (Throwable t) {
+            LogX.w("[FN1] clear leftover MANUAL failed: " + t);
+            if (gw != null) {
+                try {
+                    Object token = gw.setNetworkSelectionAutomaticSlot1();
+                    LogX.i("[FN1] Ext automatic clear token=" + token);
+                } catch (Throwable t2) {
+                    LogX.w("[FN1] Ext automatic clear failed: " + t2);
+                }
+            }
+        }
     }
 
     private static void scheduleBootRetry() {
@@ -422,58 +524,6 @@ final class Fn1ForceOos {
                 tick("boot-first");
             }
         }, 200L);
-    }
-
-    private static void disableRoaming(TelephonyManager local) {
-        try {
-            Method m = TelephonyManager.class.getMethod("setDataRoamingEnabled", boolean.class);
-            m.invoke(local, Boolean.FALSE);
-            LogX.i("[FN1] setDataRoamingEnabled(false) slot=1");
-        } catch (Throwable t) {
-            LogX.w("[FN1] setDataRoamingEnabled: " + t);
-        }
-    }
-
-    private static boolean setManualPersistTrue(TelephonyManager local, String plmn) {
-        try {
-            Method m = TelephonyManager.class.getMethod(
-                    "setNetworkSelectionModeManual", String.class, boolean.class);
-            Object r = m.invoke(local, plmn, Boolean.TRUE);
-            LogX.i("[FN1] TelephonyManager.setNetworkSelectionModeManual(" + plmn + ", persist=true) -> " + r);
-            return r == null || Boolean.TRUE.equals(r);
-        } catch (Throwable t) {
-            LogX.e("[FN1] TelephonyManager.setNetworkSelectionModeManual persist=true failed", t);
-            LogX.skip("[FN1] ExtTelephonyManager.setNetworkSelectionModeManual has no persist flag "
-                    + "(QtiSetNetworkSelectionMode). Not used; restore still goes through "
-                    + "TelephonyManager.setNetworkSelectionModeAutomatic.");
-            return false;
-        }
-    }
-
-    private static void restoreAutomatic(String why) {
-        Context ctx = context();
-        TelephonyManager local = tm();
-        if (local == null) {
-            LogX.skip("[FN1] restore: no TelephonyManager");
-            return;
-        }
-        logSlot1State(ctx, "before restore/" + why);
-        try {
-            local.setNetworkSelectionModeAutomatic();
-            LogX.i("[FN1] TelephonyManager.setNetworkSelectionModeAutomatic() slot1 why=" + why);
-        } catch (Throwable t) {
-            LogX.e("[FN1] TM setNetworkSelectionModeAutomatic failed", t);
-            if (gw != null) {
-                try {
-                    Object token = gw.setNetworkSelectionAutomaticSlot1();
-                    LogX.i("[FN1] Ext setNetworkSelectionModeAutomatic token=" + token);
-                } catch (Throwable t2) {
-                    LogX.e("[FN1] Ext automatic restore failed", t2);
-                    LogX.skip("[FN1] cannot restore automatic without forbidden persist/partition work");
-                }
-            }
-        }
-        logSlot1State(ctx, "after restore/" + why);
     }
 
     private static void startWatch() {
@@ -511,8 +561,8 @@ final class Fn1ForceOos {
     }
 
     /**
-     * Merged {@code getState()} is IN_SERVICE when backup calling / IWLAN is up.
-     * Only re-lock when WWAN itself has registered; do not treat IWLAN success as escaped OOS.
+     * After IWLAN/CIWLAN is up, turn slot 1 WWAN radio off. If that kills IWLAN, turn it
+     * back on and stop retrying. Toggle-off restores radio on.
      */
     private static final class Slot1Watcher extends TelephonyCallback
             implements TelephonyCallback.ServiceStateListener {
@@ -524,30 +574,7 @@ final class Fn1ForceOos {
                     return;
                 }
                 LogX.i("[FN1] ServiceState slot1 " + describeSs(serviceState));
-                if (serviceState != null && serviceState.getState() == ServiceState.STATE_POWER_OFF) {
-                    LogX.i("[FN1] POWER_OFF, do not re-apply");
-                    return;
-                }
-                if (wwanRegistered(serviceState)) {
-                    String why = isDomesticRoam(serviceState) ? "ultra-roam" : "wwan-in-service";
-                    LogX.i("[FN1] WWAN registered (" + why + ") -> force OOS");
-                    applyManual(why);
-                    return;
-                }
-                firstLockDone = true;
-                TelephonyManager local = tm();
-                int sel = selectionMode(local);
-                if (wlanServing(serviceState)) {
-                    logSkip("[FN1] IWLAN serving, WWAN not registered; lock holding, skip apply"
-                            + " selection=" + LogX.selectionName(sel));
-                    return;
-                }
-                if (isManualSelection(sel) || sel < 0) {
-                    logSkip("[FN1] WWAN OOS selection=" + LogX.selectionName(sel) + "; skip apply");
-                    return;
-                }
-                LogX.i("[FN1] lock lost (WWAN OOS but AUTO) -> re-apply invalid PLMN");
-                applyManual("lock-lost");
+                evaluateRadio("ss");
             } catch (Throwable t) {
                 LogX.e("[FN1] onServiceStateChanged failed", t);
             }

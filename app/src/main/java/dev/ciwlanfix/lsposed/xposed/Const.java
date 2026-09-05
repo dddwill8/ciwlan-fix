@@ -55,6 +55,8 @@ final class Const {
     static final String G_WFC_ROAM = "ciwlan_fix_wfc_roam";
     static final String G_WFC_FORCE = "ciwlan_fix_wfc_force";
     static final String G_FN1_LAST_APPLY_MS = "ciwlan_fix_fn1_last_apply_ms";
+    static final String G_FN1_RADIO_OFF = "ciwlan_fix_fn1_radio_off";
+    static final int FN1_RADIO_OFF_FAIL_LIMIT = 2;
     static final String ACTION_FN3_STATUS = "dev.ciwlanfix.lsposed.FN3_STATUS";
     static final int WFC_WIFI_PREFERRED = 2;
 
