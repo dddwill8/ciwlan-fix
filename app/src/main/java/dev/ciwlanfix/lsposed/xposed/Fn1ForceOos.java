@@ -2,9 +2,6 @@ package dev.ciwlanfix.lsposed.xposed;
 
 import android.content.Context;
 import android.os.Handler;
-import android.telephony.AccessNetworkConstants;
-import android.telephony.CellIdentity;
-import android.telephony.NetworkRegistrationInfo;
 import android.telephony.ServiceState;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
@@ -13,6 +10,14 @@ import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 final class Fn1ForceOos {
+    private static final int DOMAIN_CS = 1;
+    private static final int DOMAIN_PS = 2;
+    private static final int TRANSPORT_WWAN = 1;
+    private static final int TRANSPORT_WLAN = 2;
+    private static final int REG_HOME = 1;
+    private static final int REG_ROAMING = 5;
+    private static final int NETWORK_TYPE_IWLAN = 18;
+
     private static final AtomicBoolean INSTALLED = new AtomicBoolean(false);
 
     private static ExtPhoneGateway gw;
@@ -152,28 +157,25 @@ final class Fn1ForceOos {
         return "state=" + ss.getState()
                 + " voice=" + invokeSs(ss, "getVoiceRegState")
                 + " data=" + invokeSs(ss, "getDataRegState")
-                + " wwanCs=" + describeNri(nri(ss, NetworkRegistrationInfo.DOMAIN_CS,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN))
-                + " wwanPs=" + describeNri(nri(ss, NetworkRegistrationInfo.DOMAIN_PS,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN))
-                + " wlan=" + describeNri(nri(ss, NetworkRegistrationInfo.DOMAIN_PS,
-                AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
+                + " wwanCs=" + describeNri(nri(ss, DOMAIN_CS, TRANSPORT_WWAN))
+                + " wwanPs=" + describeNri(nri(ss, DOMAIN_PS, TRANSPORT_WWAN))
+                + " wlan=" + describeNri(nri(ss, DOMAIN_PS, TRANSPORT_WLAN))
                 + " emergencyOnly=" + emergencyOnly(ss)
                 + " op=" + ss.getOperatorNumeric()
                 + " alpha=" + ss.getOperatorAlphaLong();
     }
 
-    private static String describeNri(NetworkRegistrationInfo nri) {
+    private static String describeNri(Object nri) {
         if (nri == null) {
             return "null";
         }
-        try {
-            return "reg=" + nri.getNetworkRegistrationState()
-                    + " rat=" + nri.getAccessNetworkTechnology()
-                    + " registered=" + nri.isRegistered();
-        } catch (Throwable t) {
-            return String.valueOf(nri);
+        Object reg = invoke(nri, "getNetworkRegistrationState");
+        if (reg == null) {
+            reg = invoke(nri, "getRegistrationState");
         }
+        return "reg=" + reg
+                + " rat=" + invoke(nri, "getAccessNetworkTechnology")
+                + " registered=" + nriRegistered(nri);
     }
 
     static boolean isDomesticRoam(ServiceState ss) {
@@ -187,25 +189,22 @@ final class Fn1ForceOos {
         if (domesticName(ss.getOperatorAlphaLong()) || domesticName(ss.getOperatorAlphaShort())) {
             return true;
         }
-        CellIdentity id = wwanCell(ss);
-        if (id != null) {
-            try {
-                if (domesticName(id.getOperatorAlphaLong()) || domesticName(id.getOperatorAlphaShort())) {
-                    return true;
-                }
-            } catch (Throwable ignored) {
-            }
-        }
-        return false;
+        Object id = wwanCell(ss);
+        return id != null && (domesticName(invoke(id, "getOperatorAlphaLong"))
+                || domesticName(invoke(id, "getOperatorAlphaShort")));
     }
 
-    private static boolean domesticName(String name) {
-        if (name == null || name.isEmpty()) {
+    private static boolean domesticName(Object name) {
+        if (name == null) {
             return false;
         }
-        String n = name.toLowerCase();
-        return n.contains("ultra") || n.contains("china mobile") || n.contains("china unicom")
-                || n.contains("china telecom") || n.contains("移动") || n.contains("联通")
+        String n = name.toString();
+        if (n.isEmpty()) {
+            return false;
+        }
+        String lower = n.toLowerCase();
+        return lower.contains("ultra") || lower.contains("china mobile") || lower.contains("china unicom")
+                || lower.contains("china telecom") || n.contains("移动") || n.contains("联通")
                 || n.contains("电信");
     }
 
@@ -213,10 +212,8 @@ final class Fn1ForceOos {
         if (ss == null) {
             return false;
         }
-        NetworkRegistrationInfo cs = nri(ss, NetworkRegistrationInfo.DOMAIN_CS,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
-        NetworkRegistrationInfo ps = nri(ss, NetworkRegistrationInfo.DOMAIN_PS,
-                AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        Object cs = nri(ss, DOMAIN_CS, TRANSPORT_WWAN);
+        Object ps = nri(ss, DOMAIN_PS, TRANSPORT_WWAN);
         if (cs != null || ps != null) {
             return nriRegistered(cs) || nriRegistered(ps);
         }
@@ -230,79 +227,83 @@ final class Fn1ForceOos {
         if (ss == null) {
             return false;
         }
-        NetworkRegistrationInfo wlan = nri(ss, NetworkRegistrationInfo.DOMAIN_PS,
-                AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        Object wlan = nri(ss, DOMAIN_PS, TRANSPORT_WLAN);
         if (wlan != null) {
             return nriRegistered(wlan);
         }
-        try {
-            return ss.getDataNetworkType() == TelephonyManager.NETWORK_TYPE_IWLAN;
-        } catch (Throwable t) {
-            return false;
-        }
+        Object rat = invokeSs(ss, "getDataNetworkType");
+        return rat instanceof Integer && (Integer) rat == NETWORK_TYPE_IWLAN;
     }
 
-    private static boolean nriRegistered(NetworkRegistrationInfo nri) {
+    private static boolean nriRegistered(Object nri) {
         if (nri == null) {
             return false;
         }
-        try {
-            return nri.isRegistered();
-        } catch (Throwable t) {
-            try {
-                int st = nri.getNetworkRegistrationState();
-                return st == NetworkRegistrationInfo.REGISTRATION_STATE_HOME
-                        || st == NetworkRegistrationInfo.REGISTRATION_STATE_ROAMING;
-            } catch (Throwable t2) {
-                return false;
-            }
+        Object registered = invoke(nri, "isRegistered");
+        if (registered instanceof Boolean) {
+            return (Boolean) registered;
         }
+        Object st = invoke(nri, "getNetworkRegistrationState");
+        if (!(st instanceof Integer)) {
+            st = invoke(nri, "getRegistrationState");
+        }
+        if (st instanceof Integer) {
+            int v = (Integer) st;
+            return v == REG_HOME || v == REG_ROAMING;
+        }
+        return false;
     }
 
-    private static NetworkRegistrationInfo nri(ServiceState ss, int domain, int transport) {
-        if (ss == null) {
-            return null;
-        }
-        try {
-            return ss.getNetworkRegistrationInfo(domain, transport);
-        } catch (Throwable t) {
-            return null;
-        }
+    private static Object nri(ServiceState ss, int domain, int transport) {
+        return invoke(ss, "getNetworkRegistrationInfo", domain, transport);
     }
 
     private static String wwanMccMnc(ServiceState ss) {
-        CellIdentity id = wwanCell(ss);
+        Object id = wwanCell(ss);
         if (id != null) {
-            try {
-                String mcc = id.getMccString();
-                String mnc = id.getMncString();
-                if (mcc != null && !mcc.isEmpty()) {
-                    return mcc + (mnc == null ? "" : mnc);
+            Object mcc = invoke(id, "getMccString");
+            Object mnc = invoke(id, "getMncString");
+            if (mcc != null) {
+                String mccStr = mcc.toString();
+                if (!mccStr.isEmpty()) {
+                    return mccStr + (mnc == null ? "" : mnc.toString());
                 }
-            } catch (Throwable ignored) {
             }
         }
         return ss.getOperatorNumeric();
     }
 
-    private static CellIdentity wwanCell(ServiceState ss) {
-        NetworkRegistrationInfo[] infos = new NetworkRegistrationInfo[]{
-                nri(ss, NetworkRegistrationInfo.DOMAIN_CS, AccessNetworkConstants.TRANSPORT_TYPE_WWAN),
-                nri(ss, NetworkRegistrationInfo.DOMAIN_PS, AccessNetworkConstants.TRANSPORT_TYPE_WWAN),
+    private static Object wwanCell(ServiceState ss) {
+        Object[] infos = new Object[]{
+                nri(ss, DOMAIN_CS, TRANSPORT_WWAN),
+                nri(ss, DOMAIN_PS, TRANSPORT_WWAN),
         };
-        for (NetworkRegistrationInfo info : infos) {
+        for (Object info : infos) {
             if (!nriRegistered(info)) {
                 continue;
             }
-            try {
-                CellIdentity id = info.getCellIdentity();
-                if (id != null) {
-                    return id;
-                }
-            } catch (Throwable ignored) {
+            Object id = invoke(info, "getCellIdentity");
+            if (id != null) {
+                return id;
             }
         }
         return null;
+    }
+
+    private static Object invoke(Object target, String name, Object... args) {
+        if (target == null) {
+            return null;
+        }
+        try {
+            Method m = Reflects.match(target.getClass(), name, args);
+            if (m == null) {
+                return null;
+            }
+            m.setAccessible(true);
+            return m.invoke(target, args);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static boolean emergencyOnly(ServiceState ss) {
