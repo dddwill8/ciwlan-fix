@@ -2,6 +2,9 @@ package dev.ciwlanfix.lsposed.xposed;
 
 import android.content.Context;
 import android.os.Handler;
+import android.telephony.AccessNetworkConstants;
+import android.telephony.CellIdentity;
+import android.telephony.NetworkRegistrationInfo;
 import android.telephony.ServiceState;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyManager;
@@ -21,6 +24,7 @@ final class Fn1ForceOos {
     private static long backoffMs = Const.FN1_MIN_INTERVAL_MS;
     private static boolean restoreOncePending = true;
     private static boolean firstLockDone;
+    private static long lastSkipLogMs;
     private static final java.util.concurrent.atomic.AtomicBoolean BOOT_RETRY =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -131,12 +135,7 @@ final class Fn1ForceOos {
                 return;
             }
             ServiceState ss = local.getServiceState();
-            int sel = -1;
-            try {
-                sel = local.getNetworkSelectionMode();
-            } catch (Throwable t) {
-                LogX.w("[FN1] getNetworkSelectionMode failed: " + t);
-            }
+            int sel = selectionMode(local);
             LogX.i("[FN1] " + why
                     + " slot=1 subId=" + Slot.subIdSlot1(ctx)
                     + " selection=" + LogX.selectionName(sel)
@@ -153,39 +152,157 @@ final class Fn1ForceOos {
         return "state=" + ss.getState()
                 + " voice=" + invokeSs(ss, "getVoiceRegState")
                 + " data=" + invokeSs(ss, "getDataRegState")
+                + " wwanCs=" + describeNri(nri(ss, NetworkRegistrationInfo.DOMAIN_CS,
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN))
+                + " wwanPs=" + describeNri(nri(ss, NetworkRegistrationInfo.DOMAIN_PS,
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN))
+                + " wlan=" + describeNri(nri(ss, NetworkRegistrationInfo.DOMAIN_PS,
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN))
                 + " emergencyOnly=" + emergencyOnly(ss)
                 + " op=" + ss.getOperatorNumeric()
-                + " raw=" + ss;
+                + " alpha=" + ss.getOperatorAlphaLong();
+    }
+
+    private static String describeNri(NetworkRegistrationInfo nri) {
+        if (nri == null) {
+            return "null";
+        }
+        try {
+            return "reg=" + nri.getNetworkRegistrationState()
+                    + " rat=" + nri.getAccessNetworkTechnology()
+                    + " registered=" + nri.isRegistered();
+        } catch (Throwable t) {
+            return String.valueOf(nri);
+        }
     }
 
     static boolean isDomesticRoam(ServiceState ss) {
-        if (ss == null) {
+        if (ss == null || !wwanRegistered(ss)) {
             return false;
         }
-        String op = ss.getOperatorNumeric();
+        String op = wwanMccMnc(ss);
         if (op != null && op.startsWith("460")) {
             return true;
         }
-        String name = ss.getOperatorAlphaLong();
-        if (name != null) {
-            String n = name.toLowerCase();
-            if (n.contains("ultra") || n.contains("china mobile") || n.contains("china unicom")
-                    || n.contains("china telecom") || n.contains("移动") || n.contains("联通")
-                    || n.contains("电信")) {
-                return true;
+        if (domesticName(ss.getOperatorAlphaLong()) || domesticName(ss.getOperatorAlphaShort())) {
+            return true;
+        }
+        CellIdentity id = wwanCell(ss);
+        if (id != null) {
+            try {
+                if (domesticName(id.getOperatorAlphaLong()) || domesticName(id.getOperatorAlphaShort())) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
             }
         }
         return false;
     }
 
-    static boolean isOosOrEmergency(ServiceState ss) {
+    private static boolean domesticName(String name) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        String n = name.toLowerCase();
+        return n.contains("ultra") || n.contains("china mobile") || n.contains("china unicom")
+                || n.contains("china telecom") || n.contains("移动") || n.contains("联通")
+                || n.contains("电信");
+    }
+
+    static boolean wwanRegistered(ServiceState ss) {
         if (ss == null) {
             return false;
         }
-        int state = ss.getState();
-        return state == ServiceState.STATE_OUT_OF_SERVICE
-                || state == ServiceState.STATE_EMERGENCY_ONLY
-                || emergencyOnly(ss);
+        NetworkRegistrationInfo cs = nri(ss, NetworkRegistrationInfo.DOMAIN_CS,
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        NetworkRegistrationInfo ps = nri(ss, NetworkRegistrationInfo.DOMAIN_PS,
+                AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+        if (cs != null || ps != null) {
+            return nriRegistered(cs) || nriRegistered(ps);
+        }
+        if (wlanServing(ss)) {
+            return false;
+        }
+        return ss.getState() == ServiceState.STATE_IN_SERVICE;
+    }
+
+    static boolean wlanServing(ServiceState ss) {
+        if (ss == null) {
+            return false;
+        }
+        NetworkRegistrationInfo wlan = nri(ss, NetworkRegistrationInfo.DOMAIN_PS,
+                AccessNetworkConstants.TRANSPORT_TYPE_WLAN);
+        if (wlan != null) {
+            return nriRegistered(wlan);
+        }
+        try {
+            return ss.getDataNetworkType() == TelephonyManager.NETWORK_TYPE_IWLAN;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private static boolean nriRegistered(NetworkRegistrationInfo nri) {
+        if (nri == null) {
+            return false;
+        }
+        try {
+            return nri.isRegistered();
+        } catch (Throwable t) {
+            try {
+                int st = nri.getNetworkRegistrationState();
+                return st == NetworkRegistrationInfo.REGISTRATION_STATE_HOME
+                        || st == NetworkRegistrationInfo.REGISTRATION_STATE_ROAMING;
+            } catch (Throwable t2) {
+                return false;
+            }
+        }
+    }
+
+    private static NetworkRegistrationInfo nri(ServiceState ss, int domain, int transport) {
+        if (ss == null) {
+            return null;
+        }
+        try {
+            return ss.getNetworkRegistrationInfo(domain, transport);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static String wwanMccMnc(ServiceState ss) {
+        CellIdentity id = wwanCell(ss);
+        if (id != null) {
+            try {
+                String mcc = id.getMccString();
+                String mnc = id.getMncString();
+                if (mcc != null && !mcc.isEmpty()) {
+                    return mcc + (mnc == null ? "" : mnc);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return ss.getOperatorNumeric();
+    }
+
+    private static CellIdentity wwanCell(ServiceState ss) {
+        NetworkRegistrationInfo[] infos = new NetworkRegistrationInfo[]{
+                nri(ss, NetworkRegistrationInfo.DOMAIN_CS, AccessNetworkConstants.TRANSPORT_TYPE_WWAN),
+                nri(ss, NetworkRegistrationInfo.DOMAIN_PS, AccessNetworkConstants.TRANSPORT_TYPE_WWAN),
+        };
+        for (NetworkRegistrationInfo info : infos) {
+            if (!nriRegistered(info)) {
+                continue;
+            }
+            try {
+                CellIdentity id = info.getCellIdentity();
+                if (id != null) {
+                    return id;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
     }
 
     private static boolean emergencyOnly(ServiceState ss) {
@@ -204,6 +321,30 @@ final class Fn1ForceOos {
         }
     }
 
+    private static int selectionMode(TelephonyManager local) {
+        if (local == null) {
+            return -1;
+        }
+        try {
+            return local.getNetworkSelectionMode();
+        } catch (Throwable t) {
+            LogX.w("[FN1] getNetworkSelectionMode failed: " + t);
+            return -1;
+        }
+    }
+
+    private static boolean isManualSelection(int sel) {
+        return sel == TelephonyManager.NETWORK_SELECTION_MODE_MANUAL;
+    }
+
+    private static void logSkip(String msg) {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - lastSkipLogMs > 10_000L) {
+            lastSkipLogMs = now;
+            LogX.i(msg);
+        }
+    }
+
     private static void applyManual(String why) {
         Context ctx = context();
         if (ctx == null) {
@@ -213,36 +354,57 @@ final class Fn1ForceOos {
             LogX.i("[FN1] skip apply: airplane mode on");
             return;
         }
-        long now = android.os.SystemClock.elapsedRealtime();
-        boolean urgent = "toggle-on".equals(why) || "boot-first".equals(why)
-                || "install".equals(why) || "service-ready".equals(why)
-                || "ultra-roam".equals(why) || "service-revert".equals(why);
-        if (!urgent && now - lastApplyMs < backoffMs) {
-            LogX.i("[FN1] rate-limit skip apply why=" + why
-                    + " waitMs=" + (backoffMs - (now - lastApplyMs)));
-            return;
-        }
-        String plmn = Prefs.plmn(ctx);
         TelephonyManager local = tm();
         if (local == null) {
             LogX.skip("[FN1] no TelephonyManager for slot 1");
             scheduleBootRetry();
             return;
         }
+        ServiceState ss = null;
+        try {
+            ss = local.getServiceState();
+        } catch (Throwable t) {
+            LogX.w("[FN1] getServiceState: " + t);
+        }
+        int sel = selectionMode(local);
+        boolean wwan = wwanRegistered(ss);
+        if (!wwan && isManualSelection(sel)) {
+            firstLockDone = true;
+            LogX.i("[FN1] skip apply: WWAN not registered and already MANUAL why=" + why
+                    + " " + describeSs(ss));
+            return;
+        }
+        long now = android.os.SystemClock.elapsedRealtime();
+        long globalLast = Prefs.readGlobalLong(ctx, Const.G_FN1_LAST_APPLY_MS, 0L);
+        if (globalLast > now) {
+            globalLast = 0L;
+        }
+        long localWait = now - lastApplyMs;
+        long globalWait = now - globalLast;
+        if (localWait < backoffMs || (globalLast > 0L && globalWait < Const.FN1_MIN_INTERVAL_MS)) {
+            firstLockDone = true;
+            LogX.i("[FN1] rate-limit skip apply why=" + why
+                    + " localWaitMs=" + localWait + " globalWaitMs=" + globalWait);
+            return;
+        }
+        String plmn = Prefs.plmn(ctx);
         logSlot1State(ctx, "before apply/" + why);
+        Prefs.writeGlobal(ctx, Const.G_FN1_LAST_APPLY_MS, String.valueOf(now));
+        lastApplyMs = now;
         disableRoaming(local);
         boolean ok = setManualPersistFalse(local, plmn);
-        lastApplyMs = android.os.SystemClock.elapsedRealtime();
+        if (!ok && isManualSelection(selectionMode(local))) {
+            ok = true;
+            LogX.i("[FN1] setNetworkSelectionModeManual returned false; already MANUAL, treat as holding");
+        }
         if (ok) {
             backoffMs = Const.FN1_MIN_INTERVAL_MS;
             firstLockDone = true;
             LogX.i("[FN1] apply manual PLMN=" + plmn + " persist=false slot=1 why=" + why + " ok=true");
-        } else if (urgent) {
-            LogX.e("[FN1] apply failed (" + why + "); retry without backoff");
-            scheduleBootRetry();
         } else {
-            backoffMs = Math.min(backoffMs * 2, Const.FN1_MAX_BACKOFF_MS);
-            LogX.e("[FN1] apply failed; next backoffMs=" + backoffMs);
+            backoffMs = Math.min(Math.max(backoffMs, Const.FN1_MIN_INTERVAL_MS) * 2, Const.FN1_MAX_BACKOFF_MS);
+            LogX.e("[FN1] apply failed (" + why + "); next backoffMs=" + backoffMs);
+            scheduleBootRetry();
         }
         logSlot1State(ctx, "after apply/" + why);
     }
@@ -346,6 +508,10 @@ final class Fn1ForceOos {
         tm = null;
     }
 
+    /**
+     * Merged {@code getState()} is IN_SERVICE when backup calling / IWLAN is up.
+     * Only re-lock when WWAN itself has registered; do not treat IWLAN success as escaped OOS.
+     */
     private static final class Slot1Watcher extends TelephonyCallback
             implements TelephonyCallback.ServiceStateListener {
         @Override
@@ -360,15 +526,26 @@ final class Fn1ForceOos {
                     LogX.i("[FN1] POWER_OFF, do not re-apply");
                     return;
                 }
-                if (isDomesticRoam(serviceState)) {
-                    LogX.i("[FN1] slot1 camped on domestic roam (Ultra/460xx) -> force OOS");
-                    applyManual("ultra-roam");
+                if (wwanRegistered(serviceState)) {
+                    String why = isDomesticRoam(serviceState) ? "ultra-roam" : "wwan-in-service";
+                    LogX.i("[FN1] WWAN registered (" + why + ") -> force OOS");
+                    applyManual(why);
                     return;
                 }
-                if (!isOosOrEmergency(serviceState)) {
-                    LogX.i("[FN1] left OOS/emergency-only -> re-apply invalid PLMN persist=false");
-                    applyManual("service-revert");
+                firstLockDone = true;
+                TelephonyManager local = tm();
+                int sel = selectionMode(local);
+                if (wlanServing(serviceState)) {
+                    logSkip("[FN1] IWLAN serving, WWAN not registered; lock holding, skip apply"
+                            + " selection=" + LogX.selectionName(sel));
+                    return;
                 }
+                if (isManualSelection(sel) || sel < 0) {
+                    logSkip("[FN1] WWAN OOS selection=" + LogX.selectionName(sel) + "; skip apply");
+                    return;
+                }
+                LogX.i("[FN1] lock lost (WWAN OOS but AUTO) -> re-apply invalid PLMN");
+                applyManual("lock-lost");
             } catch (Throwable t) {
                 LogX.e("[FN1] onServiceStateChanged failed", t);
             }

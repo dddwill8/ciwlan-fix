@@ -112,6 +112,18 @@ final class Prefs {
         }
     }
 
+    static long readGlobalLong(Context ctx, String key, long def) {
+        String v = readGlobal(ctx, key);
+        if (v == null || v.isEmpty()) {
+            return def;
+        }
+        try {
+            return Long.parseLong(v.trim());
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
     static boolean readBool(Context ctx, String globalKey, String prefKey, boolean def) {
         String g = readGlobal(ctx, globalKey);
         if (g != null && !g.isEmpty()) {
