@@ -230,8 +230,12 @@ final class Fn3QnsFallback {
             return;
         }
         if (latched) {
-            logSame("[FN3] inject skip: already latched");
-            return;
+            if (imsRegisteredSlot1()) {
+                logSame("[FN3] inject skip: already latched");
+                return;
+            }
+            latched = false;
+            logSame("[FN3] IMS down on slot1; unlatch and re-inject");
         }
         Object provider = PROVIDERS.get(Const.SLOT_TARGET);
         if (provider == null) {
@@ -264,6 +268,28 @@ final class Fn3QnsFallback {
             return false;
         }
         return true;
+    }
+
+    private static boolean imsRegisteredSlot1() {
+        if (appCtx == null) {
+            return false;
+        }
+        try {
+            int subId = Slot.subIdSlot1(appCtx);
+            if (subId < 0) {
+                return false;
+            }
+            android.telephony.TelephonyManager base =
+                    appCtx.getSystemService(android.telephony.TelephonyManager.class);
+            if (base == null) {
+                return false;
+            }
+            android.telephony.TelephonyManager tm = base.createForSubscriptionId(subId);
+            Object reg = Reflects.callOrNull(tm, "isImsRegistered");
+            return Boolean.TRUE.equals(reg);
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private static void hookUpdateMethods(Class<?> cls) {

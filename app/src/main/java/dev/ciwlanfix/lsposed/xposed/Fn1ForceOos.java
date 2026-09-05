@@ -77,22 +77,22 @@ final class Fn1ForceOos {
             if (on && !lastFn1) {
                 LogX.i("[FN1] toggle ON (" + why + ")");
                 firstLockDone = false;
-                applyManual("toggle-on");
+                applyGsmOnly("toggle-on");
                 startWatch();
             } else if (on && !firstLockDone) {
-                applyManual("boot-first");
+                applyGsmOnly("boot-first");
                 startWatch();
             } else if (!on && lastFn1) {
-                LogX.i("[FN1] toggle OFF (" + why + ") -> automatic");
-                restoreAutomatic("toggle-off");
+                LogX.i("[FN1] toggle OFF (" + why + ") -> restore WWAN types + automatic");
+                restoreGsmOnly("toggle-off");
                 stopWatch();
                 lastApplyMs = 0L;
                 backoffMs = Const.FN1_MIN_INTERVAL_MS;
                 firstLockDone = false;
             } else if (!on && restoreOncePending) {
                 restoreOncePending = false;
-                LogX.i("[FN1] module loaded with FN1 off -> ensure slot 1 automatic");
-                restoreAutomatic("startup-heal");
+                LogX.i("[FN1] module loaded with FN1 off -> restore slot 1 WWAN types");
+                restoreGsmOnly("startup-heal");
             } else if (on && !watching) {
                 startWatch();
             }
@@ -144,6 +144,7 @@ final class Fn1ForceOos {
             LogX.i("[FN1] " + why
                     + " slot=1 subId=" + Slot.subIdSlot1(ctx)
                     + " selection=" + LogX.selectionName(sel)
+                    + " allowedUser=" + getAllowedUser(local)
                     + " serviceState=" + describeSs(ss));
         } catch (Throwable t) {
             LogX.e("[FN1] logSlot1State failed", t);
@@ -221,6 +222,18 @@ final class Fn1ForceOos {
             return false;
         }
         return ss.getState() == ServiceState.STATE_IN_SERVICE;
+    }
+
+    private static boolean isGsmOnlyCamp(ServiceState ss) {
+        if (!wwanRegistered(ss) || isDomesticRoam(ss)) {
+            return false;
+        }
+        int rat = -1;
+        Object v = invokeSs(ss, "getRilVoiceRadioTechnology");
+        if (v instanceof Integer) {
+            rat = (Integer) v;
+        }
+        return rat == 1 || rat == 2 || rat == 16;
     }
 
     static boolean wlanServing(ServiceState ss) {
@@ -346,7 +359,7 @@ final class Fn1ForceOos {
         }
     }
 
-    private static void applyManual(String why) {
+    private static void applyGsmOnly(String why) {
         Context ctx = context();
         if (ctx == null) {
             return;
@@ -361,18 +374,12 @@ final class Fn1ForceOos {
             scheduleBootRetry();
             return;
         }
-        ServiceState ss = null;
-        try {
-            ss = local.getServiceState();
-        } catch (Throwable t) {
-            LogX.w("[FN1] getServiceState: " + t);
-        }
-        int sel = selectionMode(local);
-        boolean wwan = wwanRegistered(ss);
-        if (!wwan && isManualSelection(sel)) {
+        long current = getAllowedUser(local);
+        publishAllowed(ctx, current);
+        if (current == Const.WWAN_GSM_ONLY) {
             firstLockDone = true;
-            LogX.i("[FN1] skip apply: WWAN not registered and already MANUAL why=" + why
-                    + " " + describeSs(ss));
+            clearLegacyManual(local, why);
+            logSkip("[FN1] skip apply: slot1 already GSM-only why=" + why);
             return;
         }
         long now = android.os.SystemClock.elapsedRealtime();
@@ -388,23 +395,25 @@ final class Fn1ForceOos {
                     + " localWaitMs=" + localWait + " globalWaitMs=" + globalWait);
             return;
         }
-        String plmn = Prefs.plmn(ctx);
+        savePreviousAllowed(ctx, current);
         logSlot1State(ctx, "before apply/" + why);
         Prefs.writeGlobal(ctx, Const.G_FN1_LAST_APPLY_MS, String.valueOf(now));
         lastApplyMs = now;
         disableRoaming(local);
-        boolean ok = setManualPersistTrue(local, plmn);
-        if (!ok && isManualSelection(selectionMode(local))) {
-            ok = true;
-            LogX.i("[FN1] setNetworkSelectionModeManual returned false; already MANUAL, treat as holding");
-        }
+        boolean ok = setAllowedUser(local, Const.WWAN_GSM_ONLY);
+        long after = getAllowedUser(local);
+        publishAllowed(ctx, after);
+        ok = ok && after == Const.WWAN_GSM_ONLY;
+        clearLegacyManual(local, why);
         if (ok) {
             backoffMs = Const.FN1_MIN_INTERVAL_MS;
             firstLockDone = true;
-            LogX.i("[FN1] apply manual PLMN=" + plmn + " persist=true slot=1 why=" + why + " ok=true");
+            LogX.i("[FN1] slot1 USER allowed " + current + " -> GSM-only " + Const.WWAN_GSM_ONLY
+                    + " why=" + why);
         } else {
             backoffMs = Math.min(Math.max(backoffMs, Const.FN1_MIN_INTERVAL_MS) * 2, Const.FN1_MAX_BACKOFF_MS);
-            LogX.e("[FN1] apply failed (" + why + "); next backoffMs=" + backoffMs);
+            LogX.e("[FN1] GSM-only apply failed (" + why + ") after=" + after
+                    + "; next backoffMs=" + backoffMs);
             scheduleBootRetry();
         }
         logSlot1State(ctx, "after apply/" + why);
@@ -434,23 +443,94 @@ final class Fn1ForceOos {
         }
     }
 
-    private static boolean setManualPersistTrue(TelephonyManager local, String plmn) {
+    private static int reasonUser() {
         try {
-            Method m = TelephonyManager.class.getMethod(
-                    "setNetworkSelectionModeManual", String.class, boolean.class);
-            Object r = m.invoke(local, plmn, Boolean.TRUE);
-            LogX.i("[FN1] TelephonyManager.setNetworkSelectionModeManual(" + plmn + ", persist=true) -> " + r);
-            return r == null || Boolean.TRUE.equals(r);
+            Object v = TelephonyManager.class.getField("ALLOWED_NETWORK_TYPES_REASON_USER").get(null);
+            if (v instanceof Integer) {
+                return (Integer) v;
+            }
+        } catch (Throwable ignored) {
+        }
+        return Const.ALLOWED_NETWORK_TYPES_REASON_USER;
+    }
+
+    private static long getAllowedUser(TelephonyManager local) {
+        if (local == null) {
+            return -1L;
+        }
+        Object r = invoke(local, "getAllowedNetworkTypesForReason", reasonUser());
+        if (r instanceof Long) {
+            return (Long) r;
+        }
+        if (r instanceof Integer) {
+            return ((Integer) r).longValue();
+        }
+        return -1L;
+    }
+
+    private static boolean setAllowedUser(TelephonyManager local, long bits) {
+        if (local == null) {
+            return false;
+        }
+        try {
+            Object[] args = new Object[]{reasonUser(), bits};
+            Method m = Reflects.match(local.getClass(), "setAllowedNetworkTypesForReason", args);
+            if (m == null) {
+                LogX.e("[FN1] setAllowedNetworkTypesForReason not found");
+                return false;
+            }
+            m.setAccessible(true);
+            m.invoke(local, args);
+            LogX.i("[FN1] setAllowedNetworkTypesForReason(USER," + bits + ") ok");
+            return true;
         } catch (Throwable t) {
-            LogX.e("[FN1] TelephonyManager.setNetworkSelectionModeManual persist=true failed", t);
-            LogX.skip("[FN1] ExtTelephonyManager.setNetworkSelectionModeManual has no persist flag "
-                    + "(QtiSetNetworkSelectionMode). Not used; restore still goes through "
-                    + "TelephonyManager.setNetworkSelectionModeAutomatic.");
+            LogX.e("[FN1] setAllowedNetworkTypesForReason failed", t);
             return false;
         }
     }
 
-    private static void restoreAutomatic(String why) {
+    private static void savePreviousAllowed(Context ctx, long current) {
+        if (ctx == null || Prefs.readGlobalInt(ctx, Const.G_FN1_ALLOWED_SAVED, 0) == 1) {
+            return;
+        }
+        if (current <= 0L || current == Const.WWAN_GSM_ONLY) {
+            LogX.w("[FN1] previous USER allowed unusable (" + current + "), not saved");
+            return;
+        }
+        Prefs.writeGlobal(ctx, Const.G_FN1_PREV_ALLOWED, String.valueOf(current));
+        Prefs.writeGlobal(ctx, Const.G_FN1_ALLOWED_SAVED, "1");
+        LogX.i("[FN1] saved previous USER allowed=" + current);
+    }
+
+    private static void publishAllowed(Context ctx, long bits) {
+        if (ctx == null || bits < 0L) {
+            return;
+        }
+        Prefs.writeGlobal(ctx, Const.G_FN1_ALLOWED_NOW, String.valueOf(bits));
+    }
+
+    private static void clearLegacyManual(TelephonyManager local, String why) {
+        int sel = selectionMode(local);
+        if (!isManualSelection(sel)) {
+            return;
+        }
+        try {
+            local.setNetworkSelectionModeAutomatic();
+            LogX.i("[FN1] cleared leftover MANUAL 99999 -> automatic why=" + why);
+        } catch (Throwable t) {
+            LogX.w("[FN1] clear leftover MANUAL failed: " + t);
+            if (gw != null) {
+                try {
+                    Object token = gw.setNetworkSelectionAutomaticSlot1();
+                    LogX.i("[FN1] Ext automatic clear token=" + token);
+                } catch (Throwable t2) {
+                    LogX.w("[FN1] Ext automatic clear failed: " + t2);
+                }
+            }
+        }
+    }
+
+    private static void restoreGsmOnly(String why) {
         Context ctx = context();
         TelephonyManager local = tm();
         if (local == null) {
@@ -458,21 +538,20 @@ final class Fn1ForceOos {
             return;
         }
         logSlot1State(ctx, "before restore/" + why);
-        try {
-            local.setNetworkSelectionModeAutomatic();
-            LogX.i("[FN1] TelephonyManager.setNetworkSelectionModeAutomatic() slot1 why=" + why);
-        } catch (Throwable t) {
-            LogX.e("[FN1] TM setNetworkSelectionModeAutomatic failed", t);
-            if (gw != null) {
-                try {
-                    Object token = gw.setNetworkSelectionAutomaticSlot1();
-                    LogX.i("[FN1] Ext setNetworkSelectionModeAutomatic token=" + token);
-                } catch (Throwable t2) {
-                    LogX.e("[FN1] Ext automatic restore failed", t2);
-                    LogX.skip("[FN1] cannot restore automatic without forbidden persist/partition work");
+        if (Prefs.readGlobalInt(ctx, Const.G_FN1_ALLOWED_SAVED, 0) == 1) {
+            long prev = Prefs.readGlobalLong(ctx, Const.G_FN1_PREV_ALLOWED, 0L);
+            if (prev > 0L && prev != Const.WWAN_GSM_ONLY) {
+                boolean ok = setAllowedUser(local, prev);
+                long after = getAllowedUser(local);
+                publishAllowed(ctx, after);
+                LogX.i("[FN1] restored USER allowed=" + prev + " after=" + after
+                        + " ok=" + ok + " why=" + why);
+                if (ok && after == prev) {
+                    Prefs.writeGlobal(ctx, Const.G_FN1_ALLOWED_SAVED, "0");
                 }
             }
         }
+        clearLegacyManual(local, why);
         logSlot1State(ctx, "after restore/" + why);
     }
 
@@ -528,26 +607,21 @@ final class Fn1ForceOos {
                     LogX.i("[FN1] POWER_OFF, do not re-apply");
                     return;
                 }
-                if (wwanRegistered(serviceState)) {
+                if (wwanRegistered(serviceState) && !isGsmOnlyCamp(serviceState)) {
                     String why = isDomesticRoam(serviceState) ? "ultra-roam" : "wwan-in-service";
-                    LogX.i("[FN1] WWAN registered (" + why + ") -> force OOS");
-                    applyManual(why);
+                    LogX.i("[FN1] WWAN registered (" + why + ") -> GSM-only");
+                    applyGsmOnly(why);
                     return;
                 }
                 firstLockDone = true;
                 TelephonyManager local = tm();
-                int sel = selectionMode(local);
-                if (wlanServing(serviceState)) {
-                    logSkip("[FN1] IWLAN serving, WWAN not registered; lock holding, skip apply"
-                            + " selection=" + LogX.selectionName(sel));
+                long allowed = getAllowedUser(local);
+                if (allowed == Const.WWAN_GSM_ONLY) {
+                    logSkip("[FN1] GSM-only holding, IWLAN/OOS skip apply");
                     return;
                 }
-                if (isManualSelection(sel) || sel < 0) {
-                    logSkip("[FN1] WWAN OOS selection=" + LogX.selectionName(sel) + "; skip apply");
-                    return;
-                }
-                LogX.i("[FN1] lock lost (WWAN OOS but AUTO) -> re-apply invalid PLMN");
-                applyManual("lock-lost");
+                LogX.i("[FN1] USER allowed=" + allowed + " -> GSM-only");
+                applyGsmOnly("lock-lost");
             } catch (Throwable t) {
                 LogX.e("[FN1] onServiceStateChanged failed", t);
             }

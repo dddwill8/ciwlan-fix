@@ -36,6 +36,7 @@ public final class HookEntry implements IXposedHookLoadPackage {
                     LogX.i("load " + Const.PKG_ANDROID_PHONE + " process=" + lpparam.processName);
                     WfcUnlock.install(lpparam.classLoader);
                     XiaomiUi.install(lpparam.classLoader);
+                    NotifyGuard.install(lpparam.classLoader);
                     hookAppCreate(lpparam, (ctx) -> {
                         WfcUnlock.attachContext(ctx);
                         Fn1ForceOos.installPhoneProcess(lpparam.classLoader, ctx);
@@ -50,11 +51,13 @@ public final class HookEntry implements IXposedHookLoadPackage {
                     LogX.i("load " + Const.PKG_SETTINGS + " process=" + lpparam.processName);
                     WfcUnlock.install(lpparam.classLoader);
                     XiaomiUi.install(lpparam.classLoader);
+                    NotifyGuard.install(lpparam.classLoader);
                     break;
                 case Const.PKG_SYSTEMUI:
                 case Const.PKG_SYSTEMUI_PLUGIN:
                     LogX.i("load " + lpparam.packageName + " process=" + lpparam.processName);
                     XiaomiUi.install(lpparam.classLoader);
+                    NotifyGuard.install(lpparam.classLoader);
                     break;
                 case Const.PKG_ENTITLEMENT:
                     LogX.i("load " + Const.PKG_ENTITLEMENT + " process=" + lpparam.processName);

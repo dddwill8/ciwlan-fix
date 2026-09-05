@@ -55,6 +55,12 @@ final class Const {
     static final String G_WFC_ROAM = "ciwlan_fix_wfc_roam";
     static final String G_WFC_FORCE = "ciwlan_fix_wfc_force";
     static final String G_FN1_LAST_APPLY_MS = "ciwlan_fix_fn1_last_apply_ms";
+    static final String G_FN1_PREV_ALLOWED = "ciwlan_fix_fn1_prev_allowed";
+    static final String G_FN1_ALLOWED_SAVED = "ciwlan_fix_fn1_allowed_saved";
+    static final String G_FN1_ALLOWED_NOW = "ciwlan_fix_fn1_allowed_now";
+    static final int ALLOWED_NETWORK_TYPES_REASON_USER = 0;
+    /** GPRS | EDGE | GSM — no LTE/NR so the T-Mobile SIM should not camp Ultra. */
+    static final long WWAN_GSM_ONLY = 1L | 2L | (1L << 15);
     static final String ACTION_FN3_STATUS = "dev.ciwlanfix.lsposed.FN3_STATUS";
     static final int WFC_WIFI_PREFERRED = 2;
 
