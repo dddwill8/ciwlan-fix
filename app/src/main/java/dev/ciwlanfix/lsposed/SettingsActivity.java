@@ -77,19 +77,25 @@ public final class SettingsActivity extends Activity {
         String setup = dash(readGlobal("ciwlan_fix_fn3_setup"));
         String cross = dash(readGlobal("cross_sim_call_1"));
         String crossSub = dash(readGlobal("ciwlan_fix_cross_sim_sub1"));
+        String wfcUser = dash(readGlobal("ciwlan_fix_wfc_user"));
+        String wfcRoam = dash(readGlobal("ciwlan_fix_wfc_roam"));
+        String wfcForce = dash(readGlobal("ciwlan_fix_wfc_force"));
 
-        if ("—".equals(fn2Done) && "—".equals(avail) && "—".equals(crossSub)) {
+        if ("—".equals(fn2Done) && "—".equals(avail) && "—".equals(crossSub) && "—".equals(wfcUser)) {
             plain.setText(R.string.status_empty);
         } else {
             plain.setText("总开关：" + (master.isChecked() ? "开" : "关（正在还原）")
                     + "\n系统通话辅助：" + yn(cross)
                     + "\n卡 2 跨卡通话：" + yn(crossSub)
+                    + "\n卡 2 Wi-Fi 通话：" + yn(wfcUser)
+                    + "\n卡 2 漫游 Wi-Fi 通话：" + yn(wfcRoam)
                     + "\n卡 2 CIWLAN 已下发：" + yn(fn2Done)
                     + "\nmodem CIWLAN 可用：" + yn(avail)
                     + "\nePDG over cellular：" + yn(epdg));
         }
 
         pro.setText("cross_sim_call_1=" + cross + "  sub1=" + crossSub
+                + "\nwfc_user=" + wfcUser + "  wfc_roam=" + wfcRoam + "  force_enable_vowifi=" + wfcForce
                 + "\nfn2_done=" + fn2Done
                 + "\nisCiwlanAvailable(1) raw=" + avail
                 + "\nisEpdgOverCellular(1)=" + epdg
@@ -131,6 +137,9 @@ public final class SettingsActivity extends Activity {
         ok &= writeGlobal(G_FN2, on ? "1" : "0");
         ok &= writeGlobal(G_PLMN, "99999");
         ok &= writeGlobal(G_FN3, fn3Value);
+        if (on) {
+            ok &= writeGlobal("cross_sim_call_1", "1");
+        }
         if (ok != globalOk) {
             globalOk = ok;
             if (!ok) {

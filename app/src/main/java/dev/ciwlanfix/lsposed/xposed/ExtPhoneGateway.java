@@ -88,6 +88,7 @@ final class ExtPhoneGateway {
         QtiPhoneHooks.installBooleanLoggers(cl, ctx);
         QtiPhoneHooks.installComparePreferencesGuard(cl, ctx);
         QtiPhoneHooks.registerFn3StatusReceiver(ctx);
+        WfcUnlock.attachContext(ctx);
         CrossSimSlot1.sync(ctx, "qti-start");
         handler.postDelayed(() -> CrossSimSlot1.sync(ctx, "qti-start-retry"), 400L);
         handler.postDelayed(() -> CrossSimSlot1.sync(ctx, "qti-start-retry2"), 3000L);

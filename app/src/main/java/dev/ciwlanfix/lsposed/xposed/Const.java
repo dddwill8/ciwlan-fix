@@ -8,6 +8,8 @@ final class Const {
     static final String PKG_QTI_PHONE = "com.qti.phone";
     static final String PKG_ANDROID_PHONE = "com.android.phone";
     static final String PKG_IWLAN = "vendor.qti.iwlan";
+    static final String PKG_IMS = "org.codeaurora.ims";
+    static final String PKG_SETTINGS = "com.android.settings";
 
     static final int SLOT_FORBIDDEN = 0;
     static final int SLOT_TARGET = 1;
@@ -46,7 +48,11 @@ final class Const {
     static final String G_SEEN_QNS3 = "ciwlan_fix_seen_qns_slot1_pref3";
     static final String G_FN3_WLAN_REG = "ciwlan_fix_fn3_wlan_reg";
     static final String G_FN3_SETUP = "ciwlan_fix_fn3_setup";
+    static final String G_WFC_USER = "ciwlan_fix_wfc_user";
+    static final String G_WFC_ROAM = "ciwlan_fix_wfc_roam";
+    static final String G_WFC_FORCE = "ciwlan_fix_wfc_force";
     static final String ACTION_FN3_STATUS = "dev.ciwlanfix.lsposed.FN3_STATUS";
+    static final int WFC_WIFI_PREFERRED = 2;
 
     static final String FN3_AUTO = "auto";
     static final String FN3_ON = "on";

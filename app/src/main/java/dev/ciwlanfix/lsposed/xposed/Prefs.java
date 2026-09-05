@@ -71,9 +71,6 @@ final class Prefs {
         if (Const.FN3_OFF.equals(mode)) {
             return false;
         }
-        if (crossSimCall1(ctx) != 1) {
-            return false;
-        }
         if (WifiAssoc.associated(ctx)) {
             return false;
         }

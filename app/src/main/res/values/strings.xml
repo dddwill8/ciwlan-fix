@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CIWLAN Fix</string>
-    <string name="xposed_description">让卡 2 在无服务时走卡 1 的数据打电话。只做运行时 Hook，不写分区/NV。</string>
+    <string name="xposed_description">打开卡 2 的 Wi-Fi 通话，无 Wi-Fi 时借卡 1 流量走跨卡通话。只做运行时 Hook，不写分区/NV。</string>
     <string name="safety_banner">假回锁设备：只改运行时电话接口。禁止刷分区、Magisk overlay、QCN/EFS/NV、写 SIM FPLMN。要停用：先关掉下面的开关等还原，再去 LSPosed 禁用模块。</string>
     <string name="master_title">卡 2 通话辅助</string>
-    <string name="master_summary">打开后会同时做三件事，缺一不可：锁住卡 2 不驻本地网、把卡 2 的 CIWLAN 设成只走跨卡、并补上 IWLAN 注册。关掉即全部还原。家里连上 Wi-Fi 时会自动改回普通 Wi-Fi 通话。</string>
+    <string name="master_summary">打开后会同时做这些事：自动打开卡 2 的 Wi-Fi 通话（不用先拨 *#*#869434#*#*）、锁住卡 2 不驻本地网、把卡 2 的 CIWLAN 设成只走跨卡，并在没 Wi-Fi 时补上 IWLAN 注册。关掉即全部还原。连上 Wi-Fi 时走普通 Wi-Fi 通话，没网时借卡 1 流量。</string>
     <string name="master_switch">开启卡 2 通话辅助</string>
     <string name="status_title">现在怎样</string>
-    <string name="status_empty">还没读到运行状态。请确认 LSPosed 勾了 com.qti.phone 和 vendor.qti.iwlan，并已重启。</string>
+    <string name="status_empty">还没读到运行状态。请确认 LSPosed 勾了 com.qti.phone、vendor.qti.iwlan、com.android.phone 和 org.codeaurora.ims，并已重启。</string>
     <string name="pro_title">专业日志（给排查用）</string>
     <string name="refresh_status">刷新</string>
     <string name="logcat_hint">电脑上看完整日志：adb logcat -s CIWLAN_FIX:D</string>

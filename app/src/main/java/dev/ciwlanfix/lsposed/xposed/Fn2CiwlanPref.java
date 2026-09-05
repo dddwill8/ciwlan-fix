@@ -63,6 +63,7 @@ final class Fn2CiwlanPref {
             return;
         }
         CrossSimSlot1.sync(gw.context(), why);
+        WfcUnlock.enableSlot1("fn2/" + why);
         if (gw.etm() == null) {
             LogX.skip("[FN2] ExtTelephonyManager not ready (" + why + ")");
             return;

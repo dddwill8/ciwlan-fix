@@ -3,5 +3,8 @@
     <string-array name="xposed_scope">
         <item>com.qti.phone</item>
         <item>vendor.qti.iwlan</item>
+        <item>com.android.phone</item>
+        <item>org.codeaurora.ims</item>
+        <item>com.android.settings</item>
     </string-array>
 </resources>

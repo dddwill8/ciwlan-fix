@@ -19,6 +19,7 @@ public final class HookEntry implements IXposedHookLoadPackage {
             switch (lpparam.packageName) {
                 case Const.PKG_QTI_PHONE:
                     LogX.i("load " + Const.PKG_QTI_PHONE + " process=" + lpparam.processName);
+                    WfcUnlock.install(lpparam.classLoader);
                     QtiPhoneHooks.install(lpparam);
                     break;
                 case Const.PKG_IWLAN:
@@ -32,9 +33,21 @@ public final class HookEntry implements IXposedHookLoadPackage {
                     hookAppCreate(lpparam, Fn3QnsFallback::attachContext);
                     break;
                 case Const.PKG_ANDROID_PHONE:
-                    LogX.i("load " + Const.PKG_ANDROID_PHONE + " process=" + lpparam.processName
-                            + " (optional FN1 scope)");
-                    hookAppCreate(lpparam, (ctx) -> Fn1ForceOos.installPhoneProcess(lpparam.classLoader, ctx));
+                    LogX.i("load " + Const.PKG_ANDROID_PHONE + " process=" + lpparam.processName);
+                    WfcUnlock.install(lpparam.classLoader);
+                    hookAppCreate(lpparam, (ctx) -> {
+                        WfcUnlock.attachContext(ctx);
+                        Fn1ForceOos.installPhoneProcess(lpparam.classLoader, ctx);
+                    });
+                    break;
+                case Const.PKG_IMS:
+                    LogX.i("load " + Const.PKG_IMS + " process=" + lpparam.processName);
+                    WfcUnlock.install(lpparam.classLoader);
+                    hookAppCreate(lpparam, WfcUnlock::attachContext);
+                    break;
+                case Const.PKG_SETTINGS:
+                    LogX.i("load " + Const.PKG_SETTINGS + " process=" + lpparam.processName);
+                    WfcUnlock.install(lpparam.classLoader);
                     break;
                 default:
                     break;

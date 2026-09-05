@@ -14,6 +14,8 @@
 
 然后打开卡 2 的跨卡 / CIWLAN，让它只走卡 1 的数据。系统自己会拦，所以还得 hook 一下，让它以为 IMS 已经走了 IWLAN，不然打不出去。
 
+国行会把外卡的 Wi-Fi 通话藏起来（以前要先拨 `*#*#869434#*#*`）。模块打开后会自己做这件事，不用再手动输暗码。
+
 家里连上 Wi-Fi 会自动改回普通 Wi-Fi 通话。关掉开关会还原。只 hook 运行时，不写分区、不改 NV。
 
 ## 怎么用
@@ -21,11 +23,11 @@
 APK 从 [Releases](https://github.com/dddwill8/ciwlan-fix/releases) 下。不想自己编的话，[Actions](https://github.com/dddwill8/ciwlan-fix/actions) 里也有 `app-debug`。没有桌面图标，设置从 **LSPosed → CIWLAN Fix** 进。
 
 1. `adb install -r` 装上。
-2. LSPosed 里启用模块，勾上 `com.qti.phone` 和 `vendor.qti.iwlan`，重启。`com.android.phone` 不用勾。
-3. 系统设置打开「通话辅助」，数据开在卡 1。找不到菜单的话看下面。
-4. 进模块把开关打开。测的时候 Wi-Fi 开着就行，先别连热点——连上了会走普通 Wi-Fi 通话，看不出模块有没有生效。
+2. LSPosed 里启用模块，勾上 `com.qti.phone`、`vendor.qti.iwlan`、`com.android.phone`、`org.codeaurora.ims`（建议也勾 `com.android.settings`），重启。
+3. 系统设置打开「通话辅助」，数据开在卡 1。找不到菜单也没关系，模块会自己写 `cross_sim_call_1`。
+4. 进模块把开关打开。有 Wi-Fi 时卡 2 走普通 Wi-Fi 通话；关掉 Wi-Fi 才是借卡 1 流量的跨卡路径。
 
-这个模块不依赖 HyperCeiler，但系统「通话辅助」得开着（打开后 `cross_sim_call_1` 会变成 `1`）。国行小米经常把这个菜单藏起来，藏起来了才需要 HyperCeiler：**电话服务 → 解锁通话辅助**，重启后再去系统设置里打开「通话辅助」。菜单本来就在、也能打开，就不用装 HyperCeiler。
+这个模块不依赖 HyperCeiler。国行小米经常把「通话辅助」菜单藏起来，模块会自己把 `cross_sim_call_1` 写成 `1`。想在系统设置里看到开关的话，用 HyperCeiler：**电话服务 → 解锁通话辅助**。
 
 HyperCeiler 里「启用网络类型选择菜单」和这个模块无关，开不开都行。
 
