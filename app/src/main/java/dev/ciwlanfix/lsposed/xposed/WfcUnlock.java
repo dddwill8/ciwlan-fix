@@ -25,6 +25,11 @@ final class WfcUnlock {
     private static final String KEY_DEFAULT_WFC = "carrier_default_wfc_ims_enabled_bool";
     private static final String KEY_DEFAULT_WFC_ROAM = "carrier_default_wfc_ims_roaming_enabled_bool";
     private static final String KEY_SKIP_ENTITLEMENT = "imsserviceentitlement.skip_wfc_activation_bool";
+    private static final String KEY_DEFAULT_ENTITLEMENT = "imsserviceentitlement.default_service_entitlement_status_bool";
+    private static final String KEY_IMS_PROVISIONING = "imsserviceentitlement.ims_provisioning_bool";
+    private static final String KEY_SHOW_VOWIFI_WEBVIEW = "imsserviceentitlement.show_vowifi_webview_bool";
+    private static final String KEY_VOLTE_OVERRIDE_WFC = "carrier_volte_override_wfc_provisioning_bool";
+    private static final String KEY_SHOW_WFC_ICON = "show_wifi_calling_icon_in_status_bar_bool";
     private static Context appCtx;
 
     private WfcUnlock() {}
@@ -44,6 +49,7 @@ final class WfcUnlock {
         hookCarrierConfig(cl);
         hookImsManager(cl);
         hookMiuiHelpers(cl);
+        hookEntitlement(cl);
         LogX.i("[WFC] hooks installed");
     }
 
@@ -225,6 +231,11 @@ final class WfcUnlock {
         putBool(bundle, KEY_DEFAULT_WFC, true);
         putBool(bundle, KEY_DEFAULT_WFC_ROAM, true);
         putBool(bundle, KEY_SKIP_ENTITLEMENT, true);
+        putBool(bundle, KEY_DEFAULT_ENTITLEMENT, true);
+        putBool(bundle, KEY_IMS_PROVISIONING, false);
+        putBool(bundle, KEY_SHOW_VOWIFI_WEBVIEW, false);
+        putBool(bundle, KEY_VOLTE_OVERRIDE_WFC, false);
+        putBool(bundle, KEY_SHOW_WFC_ICON, true);
     }
 
     private static void putBool(Object bundle, String key, boolean value) {
@@ -277,11 +288,13 @@ final class WfcUnlock {
                             || name.contains("Platform")
                             || name.contains("ByUser")
                             || name.contains("Roaming")
+                            || name.contains("Provision")
                             || "isVoWiFiEnabled".equals(name)
                             || "isVoWifiForceEnabled".equals(name)
                             || "isWfcEnabledByPlatform".equals(name)
                             || "isWfcEnabledByUser".equals(name)
                             || "isWfcRoamingEnabledByUser".equals(name)
+                            || "isWfcProvisionedOnDevice".equals(name)
                             || "isVoWiFiSettingEnabled".equals(name)
                             || "isVoWiFiRoamingSettingEnabled".equals(name);
                     if (!force) {
@@ -300,6 +313,51 @@ final class WfcUnlock {
             LogX.i("[WFC] hook " + label);
         } catch (Throwable t) {
             LogX.w("[WFC] hook " + label + ": " + t);
+        }
+    }
+
+    private static void hookEntitlement(ClassLoader cl) {
+        String[] names = new String[]{
+                "com.android.imsserviceentitlement.ImsServiceEntitlement",
+                "com.android.imsserviceentitlement.WfcActivationActivity",
+                "com.android.imsserviceentitlement.entitlement.EntitlementApi",
+                "com.android.imsserviceentitlement.entitlement.EntitlementResult",
+                "android.telephony.ims.ImsManager",
+                "com.android.ims.ImsManager",
+        };
+        for (String n : names) {
+            Class<?> c = Reflects.findOrNull(cl, n);
+            if (c == null) {
+                continue;
+            }
+            for (Method m : c.getDeclaredMethods()) {
+                String name = m.getName();
+                String lower = name.toLowerCase();
+                if (!(lower.contains("entitlement") || lower.contains("activation")
+                        || lower.contains("provision") || "isWfcProvisionedOnDevice".equals(name))) {
+                    continue;
+                }
+                Class<?> rt = m.getReturnType();
+                if (rt != boolean.class && rt != Boolean.class) {
+                    continue;
+                }
+                try {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!masterOn()) {
+                                return;
+                            }
+                            if (!Boolean.TRUE.equals(param.getResult())) {
+                                param.setResult(true);
+                            }
+                        }
+                    });
+                    LogX.i("[WFC] hook entitlement " + n + "." + name);
+                } catch (Throwable t) {
+                    LogX.w("[WFC] hook entitlement " + n + "." + name + ": " + t);
+                }
+            }
         }
     }
 

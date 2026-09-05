@@ -10,16 +10,27 @@ android {
         applicationId = "dev.ciwlanfix.lsposed"
         minSdk = 35
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
+    }
+
+    signingConfigs {
+        create("ciwlan") {
+            storeFile = file("ciwlan-fix.keystore")
+            storePassword = "ciwlanfix"
+            keyAlias = "ciwlan"
+            keyPassword = "ciwlanfix"
+        }
     }
 
     buildTypes {
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("ciwlan")
         }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("ciwlan")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

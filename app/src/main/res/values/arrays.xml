@@ -6,5 +6,8 @@
         <item>com.android.phone</item>
         <item>org.codeaurora.ims</item>
         <item>com.android.settings</item>
+        <item>com.android.systemui</item>
+        <item>miui.systemui.plugin</item>
+        <item>com.android.imsserviceentitlement</item>
     </string-array>
 </resources>

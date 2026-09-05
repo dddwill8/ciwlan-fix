@@ -10,6 +10,9 @@ final class Const {
     static final String PKG_IWLAN = "vendor.qti.iwlan";
     static final String PKG_IMS = "org.codeaurora.ims";
     static final String PKG_SETTINGS = "com.android.settings";
+    static final String PKG_SYSTEMUI = "com.android.systemui";
+    static final String PKG_SYSTEMUI_PLUGIN = "miui.systemui.plugin";
+    static final String PKG_ENTITLEMENT = "com.android.imsserviceentitlement";
 
     static final int SLOT_FORBIDDEN = 0;
     static final int SLOT_TARGET = 1;

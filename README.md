@@ -1,45 +1,93 @@
 # CIWLAN Fix
 
-## 为什么需要
+国行安卓插一张海外卡当卡 2，本来很难像 iPhone 那样用：有 Wi-Fi 时打 Wi-Fi 电话，没 Wi-Fi 时借国内卡的流量打电话、收短信。这个 LSPosed 模块就是做这件事的。
 
-国行手机一般绑不了 eSIM。要用海外号，得先把 eSIM 写到小白卡上（能写入 eSIM 的实体卡），再当卡 2 插进去；卡 1 还是国内 SIM，用来上网。
+只改运行时，不刷分区、不改 NV、不写 SIM。
 
-国行安卓有个问题：就算手动画网，把卡 2 的 eSIM 搞到无服务，也不能像 iPhone 那样让这张卡借卡 1 的流量走 Wi-Fi Calling。这个模块要做的，就是让国行安卓有接近 iPhone 的 eSIM 体验——把卡 2 锁在无服务，再借卡 1 的流量打电话、收短信。
+## 这是干啥的
 
-我只在一台国行小米 17 Pro（25098PN5AC，HyperOS 3）上打通过。高通小米、设置里能看到「通话辅助」、而且有 `com.qti.phone` 和 `vendor.qti.iwlan` 的，可以自己试试。联发科和其他品牌别装。
+常见用法：卡 1 是国内卡（上网），卡 2 是海外号（写在小白卡上的 eSIM，或实体外卡）。
 
-## 原理
+国行系统会拦两件事：
 
-卡 2 得先保持无服务。一旦连上国内漫游，电话短信就会走漫游，又贵，也不是 Wi-Fi Calling。
+1. **Wi-Fi 通话被藏起来。** 外卡明明支持 Wi-Fi Calling，设置里没有开关，不拨 `*#*#869434#*#*` 用不了。
+2. **没 Wi-Fi 时，外卡不会借国内卡的流量打电话。** 它要么没服务，要么去连国内漫游网（比如显示 Ultra），一打电话就是国际漫游费。
 
-然后打开卡 2 的跨卡 / CIWLAN，让它只走卡 1 的数据。系统自己会拦，所以还得 hook 一下，让它以为 IMS 已经走了 IWLAN，不然打不出去。
+打开模块后：
 
-国行会把外卡的 Wi-Fi 通话藏起来（以前要先拨 `*#*#869434#*#*`）。模块打开后会自己做这件事，不用再手动输暗码。
+- **有 Wi-Fi：** 卡 2 走普通 Wi-Fi 通话。不用先拨暗码。
+- **没 Wi-Fi：** 卡 2 保持无服务，借卡 1 的流量走跨卡通话（CIWLAN）。
+- 卡 2 不会去驻留国内网，避免 Ultra 这类漫游。
+- 状态栏可以出现 VoWiFi 图标。
+- **不需要 HyperCeiler。** 通话辅助、Wi-Fi 通话开关、图标，模块自己解开。
 
-家里连上 Wi-Fi 会自动改回普通 Wi-Fi 通话。关掉开关会还原。只 hook 运行时，不写分区、不改 NV。
+关掉模块开关会还原。
 
-## 怎么用
+## 谁能用
 
-APK 从 [Releases](https://github.com/dddwill8/ciwlan-fix/releases) 下。不想自己编的话，[Actions](https://github.com/dddwill8/ciwlan-fix/actions) 里也有 `app-debug`。没有桌面图标，设置从 **LSPosed → CIWLAN Fix** 进。
+我只在一台国行小米 17 Pro（25098PN5AC，HyperOS 3）上打通过。高通小米、能看到电话相关设置、而且有 `com.qti.phone` 和 `vendor.qti.iwlan` 的，可以自己试试。联发科和其他品牌别装。
 
-1. `adb install -r` 装上。
-2. LSPosed 里启用模块，勾上 `com.qti.phone`、`vendor.qti.iwlan`、`com.android.phone`、`org.codeaurora.ims`（建议也勾 `com.android.settings`），重启。
-3. 系统设置打开「通话辅助」，数据开在卡 1。找不到菜单也没关系，模块会自己写 `cross_sim_call_1`。
-4. 进模块把开关打开。有 Wi-Fi 时卡 2 走普通 Wi-Fi 通话；关掉 Wi-Fi 才是借卡 1 流量的跨卡路径。
+手机需要 Root + LSPosed（Zygisk）。假回锁（abl / efisp）可以用，模块不碰分区。
 
-这个模块不依赖 HyperCeiler。国行小米经常把「通话辅助」菜单藏起来，模块会自己把 `cross_sim_call_1` 写成 `1`。想在系统设置里看到开关的话，用 HyperCeiler：**电话服务 → 解锁通话辅助**。
+## 怎么装
 
-HyperCeiler 里「启用网络类型选择菜单」和这个模块无关，开不开都行。
+1. 从 [Releases](https://github.com/dddwill8/ciwlan-fix/releases) 或 [Actions](https://github.com/dddwill8/ciwlan-fix/actions) 里的 `app-debug` 下 APK。
+2. `adb install -r` 装上。没有桌面图标。
+3. 打开 LSPosed，启用 **CIWLAN Fix**，把推荐应用都勾上（模块会提示）。至少要有：
 
-开关写不进去的话，在电脑跑这句：
+   - `com.qti.phone`
+   - `vendor.qti.iwlan`
+   - `com.android.phone`
+   - `org.codeaurora.ims`
+   - `com.android.settings`
+   - `com.android.systemui`
+   - `miui.systemui.plugin`
+   - `com.android.imsserviceentitlement`
+
+4. 重启。
+5. LSPosed → CIWLAN Fix，打开「开启卡 2 通话辅助」。数据开在卡 1。
+
+开关写不进去的话，在电脑执行：
 
 ```bash
 adb shell su 0 pm grant dev.ciwlanfix.lsposed android.permission.WRITE_SECURE_SETTINGS
 ```
 
-卸的时候先关模块里的开关，等它把卡 2 改回去，再去 LSPosed 禁用、重启，最后才卸 APK。直接禁模块或者直接卸，卡 2 可能还停在无服务。
+## 怎么用
 
-日志：`adb logcat -s CIWLAN_FIX:D`。自己编：`./gradlew :app:assembleDebug`。
+打开开关就行。
+
+| 你在干什么 | 卡 2 会怎样 |
+| --- | --- |
+| 连着家里 / 公司 Wi-Fi | 普通 Wi-Fi 通话 |
+| Wi-Fi 关掉，只用卡 1 流量 | 借卡 1 流量打电话、收短信 |
+| 人在国内 | 卡 2 保持无服务，不连 Ultra / 国内漫游网 |
+
+测跨卡那条路时，先别连 Wi-Fi：连上了会走普通 Wi-Fi 通话，看不出跨卡有没有生效。
+
+T-Mobile 等美卡第一次开 Wi-Fi 通话，运营商有时还要紧急地址。模块会跳过手机上的开通网页；如果仍然注册不上，需要在运营商 App 或网页里补一次地址。
+
+## 怎么卸
+
+1. 先关掉模块里的开关，等它把卡 2 改回自动选网。
+2. 再去 LSPosed 禁用模块，重启。
+3. 最后才卸 APK。
+
+直接禁模块或直接卸，卡 2 可能还停在无服务。
+
+## 自己编
+
+```bash
+./gradlew :app:assembleDebug
+```
+
+APK 用仓库里的 `app/ciwlan-fix.keystore` 签名，云编译和本地编出来的包可以互相覆盖安装。
+
+日志：
+
+```bash
+adb logcat -s CIWLAN_FIX:D
+```
 
 ## License
 

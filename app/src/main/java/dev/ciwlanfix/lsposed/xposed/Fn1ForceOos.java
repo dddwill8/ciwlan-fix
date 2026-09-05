@@ -42,11 +42,7 @@ final class Fn1ForceOos {
     }
 
     static void installPhoneProcess(ClassLoader cl, Context ctx) {
-        if (gw != null) {
-            LogX.i("[FN1] com.android.phone scoped but com.qti.phone already owns FN1");
-            return;
-        }
-        LogX.i("[FN1] running inside com.android.phone (optional scope)");
+        LogX.i("[FN1] running inside com.android.phone");
         HandlerThreadHolder.start(ctx, () -> tick("phone-process"));
     }
 
@@ -162,6 +158,26 @@ final class Fn1ForceOos {
                 + " raw=" + ss;
     }
 
+    static boolean isDomesticRoam(ServiceState ss) {
+        if (ss == null) {
+            return false;
+        }
+        String op = ss.getOperatorNumeric();
+        if (op != null && op.startsWith("460")) {
+            return true;
+        }
+        String name = ss.getOperatorAlphaLong();
+        if (name != null) {
+            String n = name.toLowerCase();
+            if (n.contains("ultra") || n.contains("china mobile") || n.contains("china unicom")
+                    || n.contains("china telecom") || n.contains("移动") || n.contains("联通")
+                    || n.contains("电信")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static boolean isOosOrEmergency(ServiceState ss) {
         if (ss == null) {
             return false;
@@ -199,7 +215,8 @@ final class Fn1ForceOos {
         }
         long now = android.os.SystemClock.elapsedRealtime();
         boolean urgent = "toggle-on".equals(why) || "boot-first".equals(why)
-                || "install".equals(why) || "service-ready".equals(why);
+                || "install".equals(why) || "service-ready".equals(why)
+                || "ultra-roam".equals(why) || "service-revert".equals(why);
         if (!urgent && now - lastApplyMs < backoffMs) {
             LogX.i("[FN1] rate-limit skip apply why=" + why
                     + " waitMs=" + (backoffMs - (now - lastApplyMs)));
@@ -213,6 +230,7 @@ final class Fn1ForceOos {
             return;
         }
         logSlot1State(ctx, "before apply/" + why);
+        disableRoaming(local);
         boolean ok = setManualPersistFalse(local, plmn);
         lastApplyMs = android.os.SystemClock.elapsedRealtime();
         if (ok) {
@@ -243,13 +261,23 @@ final class Fn1ForceOos {
         }, 200L);
     }
 
+    private static void disableRoaming(TelephonyManager local) {
+        try {
+            Method m = TelephonyManager.class.getMethod("setDataRoamingEnabled", boolean.class);
+            m.invoke(local, Boolean.FALSE);
+            LogX.i("[FN1] setDataRoamingEnabled(false) slot=1");
+        } catch (Throwable t) {
+            LogX.w("[FN1] setDataRoamingEnabled: " + t);
+        }
+    }
+
     private static boolean setManualPersistFalse(TelephonyManager local, String plmn) {
         try {
             Method m = TelephonyManager.class.getMethod(
                     "setNetworkSelectionModeManual", String.class, boolean.class);
             Object r = m.invoke(local, plmn, Boolean.FALSE);
             LogX.i("[FN1] TelephonyManager.setNetworkSelectionModeManual(" + plmn + ", persist=false) -> " + r);
-            return true;
+            return r == null || Boolean.TRUE.equals(r);
         } catch (Throwable t) {
             LogX.e("[FN1] TelephonyManager.setNetworkSelectionModeManual persist=false failed", t);
             LogX.skip("[FN1] ExtTelephonyManager.setNetworkSelectionModeManual has no persist flag "
@@ -332,6 +360,11 @@ final class Fn1ForceOos {
                     LogX.i("[FN1] POWER_OFF, do not re-apply");
                     return;
                 }
+                if (isDomesticRoam(serviceState)) {
+                    LogX.i("[FN1] slot1 camped on domestic roam (Ultra/460xx) -> force OOS");
+                    applyManual("ultra-roam");
+                    return;
+                }
                 if (!isOosOrEmergency(serviceState)) {
                     LogX.i("[FN1] left OOS/emergency-only -> re-apply invalid PLMN persist=false");
                     applyManual("service-revert");
@@ -345,6 +378,7 @@ final class Fn1ForceOos {
     private static final class HandlerThreadHolder {
         static Context ctx;
         static Handler handler;
+        static final AtomicBoolean STARTED = new AtomicBoolean(false);
 
         static void start(Context context, Runnable first) {
             if (context == null) {
@@ -353,6 +387,12 @@ final class Fn1ForceOos {
             }
             Context app = context.getApplicationContext();
             ctx = app != null ? app : context;
+            if (!STARTED.compareAndSet(false, true)) {
+                if (handler != null && first != null) {
+                    handler.post(first);
+                }
+                return;
+            }
             android.os.HandlerThread ht = new android.os.HandlerThread("CIWLAN_FIX_FN1");
             ht.start();
             handler = new Handler(ht.getLooper());
