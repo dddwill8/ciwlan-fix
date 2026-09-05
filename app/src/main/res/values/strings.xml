@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">CIWLAN Fix</string>
     <string name="xposed_description">卡 2 有 Wi-Fi 就打 Wi-Fi 电话，没网就借卡 1 的流量打。不用 HyperCeiler，也不用先拨暗码。</string>
-    <string name="safety_banner">假回锁设备：只改运行时电话接口。禁止刷分区、Magisk overlay、QCN/EFS/NV、写 SIM FPLMN。要停用：先关掉下面的开关等还原，再去 LSPosed 禁用模块。</string>
+    <string name="safety_banner">假回锁设备：只改运行时电话接口。禁止刷分区、Magisk overlay、QCN/EFS、写 SIM FPLMN。卡 2 锁无服务会持久化手动选网，关掉下面的开关会还原。要停用：先关开关等还原，再去 LSPosed 禁用模块。</string>
     <string name="master_title">卡 2 通话辅助</string>
     <string name="master_summary">打开后会自动打开卡 2 的 Wi-Fi 通话、锁住卡 2 不连国内漫游网、并在没 Wi-Fi 时借卡 1 流量打电话。关掉即全部还原。不需要 HyperCeiler，也不用先拨 *#*#869434#*#*。</string>
     <string name="master_switch">开启卡 2 通话辅助</string>

@@ -393,7 +393,7 @@ final class Fn1ForceOos {
         Prefs.writeGlobal(ctx, Const.G_FN1_LAST_APPLY_MS, String.valueOf(now));
         lastApplyMs = now;
         disableRoaming(local);
-        boolean ok = setManualPersistFalse(local, plmn);
+        boolean ok = setManualPersistTrue(local, plmn);
         if (!ok && isManualSelection(selectionMode(local))) {
             ok = true;
             LogX.i("[FN1] setNetworkSelectionModeManual returned false; already MANUAL, treat as holding");
@@ -401,7 +401,7 @@ final class Fn1ForceOos {
         if (ok) {
             backoffMs = Const.FN1_MIN_INTERVAL_MS;
             firstLockDone = true;
-            LogX.i("[FN1] apply manual PLMN=" + plmn + " persist=false slot=1 why=" + why + " ok=true");
+            LogX.i("[FN1] apply manual PLMN=" + plmn + " persist=true slot=1 why=" + why + " ok=true");
         } else {
             backoffMs = Math.min(Math.max(backoffMs, Const.FN1_MIN_INTERVAL_MS) * 2, Const.FN1_MAX_BACKOFF_MS);
             LogX.e("[FN1] apply failed (" + why + "); next backoffMs=" + backoffMs);
@@ -434,17 +434,18 @@ final class Fn1ForceOos {
         }
     }
 
-    private static boolean setManualPersistFalse(TelephonyManager local, String plmn) {
+    private static boolean setManualPersistTrue(TelephonyManager local, String plmn) {
         try {
             Method m = TelephonyManager.class.getMethod(
                     "setNetworkSelectionModeManual", String.class, boolean.class);
-            Object r = m.invoke(local, plmn, Boolean.FALSE);
-            LogX.i("[FN1] TelephonyManager.setNetworkSelectionModeManual(" + plmn + ", persist=false) -> " + r);
+            Object r = m.invoke(local, plmn, Boolean.TRUE);
+            LogX.i("[FN1] TelephonyManager.setNetworkSelectionModeManual(" + plmn + ", persist=true) -> " + r);
             return r == null || Boolean.TRUE.equals(r);
         } catch (Throwable t) {
-            LogX.e("[FN1] TelephonyManager.setNetworkSelectionModeManual persist=false failed", t);
+            LogX.e("[FN1] TelephonyManager.setNetworkSelectionModeManual persist=true failed", t);
             LogX.skip("[FN1] ExtTelephonyManager.setNetworkSelectionModeManual has no persist flag "
-                    + "(QtiSetNetworkSelectionMode). Not used, to avoid modem-permanent manual PLMN.");
+                    + "(QtiSetNetworkSelectionMode). Not used; restore still goes through "
+                    + "TelephonyManager.setNetworkSelectionModeAutomatic.");
             return false;
         }
     }
