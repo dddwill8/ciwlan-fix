@@ -17,7 +17,7 @@
             android:background="@color/banner_bg"
             android:padding="12dp"
             android:text="@string/safety_banner"
-            android:textColor="@color/danger"
+            android:textColor="@color/banner_text"
             android:textSize="13sp" />
 
         <TextView

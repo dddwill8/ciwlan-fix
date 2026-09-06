@@ -2,5 +2,6 @@
 <resources>
     <color name="ic_launcher_bg">#0B3D3A</color>
     <color name="danger">#B71C1C</color>
-    <color name="banner_bg">#331B1B</color>
+    <color name="banner_bg">#1A2E2C</color>
+    <color name="banner_text">#C8E6E0</color>
 </resources>
