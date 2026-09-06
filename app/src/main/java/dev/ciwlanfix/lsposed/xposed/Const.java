@@ -1,6 +1,6 @@
 package dev.ciwlanfix.lsposed.xposed;
 
-final class Const {
+public final class Const {
     static final String TAG = "CIWLAN_FIX";
     static final String MODULE_PKG = "dev.ciwlanfix.lsposed";
     static final String PREF_FILE = "ciwlan_fix";
@@ -54,8 +54,8 @@ final class Const {
     static final String G_WFC_USER = "ciwlan_fix_wfc_user";
     static final String G_WFC_ROAM = "ciwlan_fix_wfc_roam";
     static final String G_WFC_FORCE = "ciwlan_fix_wfc_force";
-    static final String G_FN1_LAST_APPLY_MS = "ciwlan_fix_fn1_last_apply_ms";
-    static final String G_FN1_APPLIED_PLMN = "ciwlan_fix_fn1_applied_plmn";
+    public static final String G_FN1_LAST_APPLY_MS = "ciwlan_fix_fn1_last_apply_ms";
+    public static final String G_FN1_APPLIED_PLMN = "ciwlan_fix_fn1_applied_plmn";
     static final String ACTION_FN3_STATUS = "dev.ciwlanfix.lsposed.FN3_STATUS";
     static final int WFC_WIFI_PREFERRED = 2;
 
@@ -64,14 +64,14 @@ final class Const {
     static final String FN3_OFF = "off";
 
     /** China Unicom. T-Mobile may roam here — last resort. */
-    static final String PLMN_UNICOM = "46001";
+    public static final String PLMN_UNICOM = "46001";
     /** China Telecom. Community default for "can't register". */
-    static final String PLMN_CT = "46011";
+    public static final String PLMN_CT = "46011";
     /** China Broadnet. */
-    static final String PLMN_CBN = "46015";
-    static final String DEFAULT_PLMN = PLMN_CT;
+    public static final String PLMN_CBN = "46015";
+    public static final String DEFAULT_PLMN = PLMN_CT;
 
-    static final String ADB_LOGCAT = "adb logcat -s CIWLAN_FIX:D";
+    public static final String ADB_LOGCAT = "adb logcat -s CIWLAN_FIX:D";
     static final String CROSS_SIM_CALL_1 = "cross_sim_call_1";
     static final String G_CROSS_SIM_SUB1 = "ciwlan_fix_cross_sim_sub1";
 
@@ -83,7 +83,7 @@ final class Const {
 
     private Const() {}
 
-    static String normalizePlmn(String raw) {
+    public static String normalizePlmn(String raw) {
         if (raw == null) {
             return DEFAULT_PLMN;
         }
@@ -94,7 +94,7 @@ final class Const {
         return DEFAULT_PLMN;
     }
 
-    static String plmnLabel(String plmn) {
+    public static String plmnLabel(String plmn) {
         switch (normalizePlmn(plmn)) {
             case PLMN_UNICOM:
                 return "中国联通";
