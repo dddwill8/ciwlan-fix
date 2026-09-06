@@ -55,6 +55,7 @@ final class Const {
     static final String G_WFC_ROAM = "ciwlan_fix_wfc_roam";
     static final String G_WFC_FORCE = "ciwlan_fix_wfc_force";
     static final String G_FN1_LAST_APPLY_MS = "ciwlan_fix_fn1_last_apply_ms";
+    static final String G_FN1_APPLIED_PLMN = "ciwlan_fix_fn1_applied_plmn";
     static final String ACTION_FN3_STATUS = "dev.ciwlanfix.lsposed.FN3_STATUS";
     static final int WFC_WIFI_PREFERRED = 2;
 
@@ -62,7 +63,15 @@ final class Const {
     static final String FN3_ON = "on";
     static final String FN3_OFF = "off";
 
-    static final String DEFAULT_PLMN = "99999";
+    /** China Unicom. T-Mobile may roam here — last resort. */
+    static final String PLMN_UNICOM = "46001";
+    /** China Telecom. Community default for "can't register". */
+    static final String PLMN_CT = "46011";
+    /** China Broadnet. */
+    static final String PLMN_CBN = "46015";
+    static final String DEFAULT_PLMN = PLMN_CT;
+
+    static final String ADB_LOGCAT = "adb logcat -s CIWLAN_FIX:D";
     static final String CROSS_SIM_CALL_1 = "cross_sim_call_1";
     static final String G_CROSS_SIM_SUB1 = "ciwlan_fix_cross_sim_sub1";
 
@@ -73,4 +82,28 @@ final class Const {
     static final long CROSS_SIM_IDLE_MS = 30_000L;
 
     private Const() {}
+
+    static String normalizePlmn(String raw) {
+        if (raw == null) {
+            return DEFAULT_PLMN;
+        }
+        String s = raw.trim();
+        if (PLMN_UNICOM.equals(s) || PLMN_CT.equals(s) || PLMN_CBN.equals(s)) {
+            return s;
+        }
+        return DEFAULT_PLMN;
+    }
+
+    static String plmnLabel(String plmn) {
+        switch (normalizePlmn(plmn)) {
+            case PLMN_UNICOM:
+                return "中国联通";
+            case PLMN_CT:
+                return "中国电信";
+            case PLMN_CBN:
+                return "中国广电";
+            default:
+                return normalizePlmn(plmn);
+        }
+    }
 }

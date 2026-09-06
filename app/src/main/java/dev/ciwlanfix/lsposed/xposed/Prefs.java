@@ -37,11 +37,11 @@ final class Prefs {
     static String plmn(Context ctx) {
         String g = readGlobal(ctx, Const.G_PLMN);
         if (g != null && !g.isEmpty()) {
-            return g.trim();
+            return Const.normalizePlmn(g);
         }
         try {
             String v = xsp().getString(Const.K_PLMN, Const.DEFAULT_PLMN);
-            return (v == null || v.trim().isEmpty()) ? Const.DEFAULT_PLMN : v.trim();
+            return Const.normalizePlmn(v);
         } catch (Throwable t) {
             return Const.DEFAULT_PLMN;
         }

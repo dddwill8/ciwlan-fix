@@ -141,8 +141,11 @@ final class Fn1ForceOos {
             }
             ServiceState ss = local.getServiceState();
             int sel = selectionMode(local);
+            String want = Prefs.plmn(ctx);
             LogX.i("[FN1] " + why
                     + " slot=1 subId=" + Slot.subIdSlot1(ctx)
+                    + " wantPlmn=" + want + "(" + Const.plmnLabel(want) + ")"
+                    + " applied=" + Prefs.readGlobal(ctx, Const.G_FN1_APPLIED_PLMN)
                     + " selection=" + LogX.selectionName(sel)
                     + " serviceState=" + describeSs(ss));
         } catch (Throwable t) {
@@ -369,10 +372,12 @@ final class Fn1ForceOos {
         }
         int sel = selectionMode(local);
         boolean wwan = wwanRegistered(ss);
-        if (!wwan && isManualSelection(sel)) {
+        String want = Prefs.plmn(ctx);
+        String applied = Prefs.readGlobal(ctx, Const.G_FN1_APPLIED_PLMN);
+        if (!wwan && isManualSelection(sel) && want.equals(applied)) {
             firstLockDone = true;
-            LogX.i("[FN1] skip apply: WWAN not registered and already MANUAL why=" + why
-                    + " " + describeSs(ss));
+            logSkip("[FN1] skip apply: WWAN idle, MANUAL holding "
+                    + want + "(" + Const.plmnLabel(want) + ") why=" + why);
             return;
         }
         long now = android.os.SystemClock.elapsedRealtime();
@@ -401,10 +406,16 @@ final class Fn1ForceOos {
         if (ok) {
             backoffMs = Const.FN1_MIN_INTERVAL_MS;
             firstLockDone = true;
-            LogX.i("[FN1] apply manual PLMN=" + plmn + " persist=true slot=1 why=" + why + " ok=true");
+            Prefs.writeGlobal(ctx, Const.G_FN1_APPLIED_PLMN, plmn);
+            if (!plmn.equals(Prefs.readGlobal(ctx, Const.G_PLMN))) {
+                Prefs.writeGlobal(ctx, Const.G_PLMN, plmn);
+            }
+            LogX.i("[FN1] apply manual PLMN=" + plmn + "(" + Const.plmnLabel(plmn)
+                    + ") persist=true slot=1 why=" + why + " ok=true wwanMccMnc="
+                    + wwanMccMnc(ss) + " alpha=" + (ss == null ? null : ss.getOperatorAlphaLong()));
         } else {
             backoffMs = Math.min(Math.max(backoffMs, Const.FN1_MIN_INTERVAL_MS) * 2, Const.FN1_MAX_BACKOFF_MS);
-            LogX.e("[FN1] apply failed (" + why + "); next backoffMs=" + backoffMs);
+            LogX.e("[FN1] apply failed PLMN=" + plmn + " why=" + why + "; next backoffMs=" + backoffMs);
             scheduleBootRetry();
         }
         logSlot1State(ctx, "after apply/" + why);
@@ -458,6 +469,7 @@ final class Fn1ForceOos {
             return;
         }
         logSlot1State(ctx, "before restore/" + why);
+        Prefs.writeGlobal(ctx, Const.G_FN1_APPLIED_PLMN, "");
         try {
             local.setNetworkSelectionModeAutomatic();
             LogX.i("[FN1] TelephonyManager.setNetworkSelectionModeAutomatic() slot1 why=" + why);
@@ -523,30 +535,37 @@ final class Fn1ForceOos {
                 if (ctx == null || !Prefs.fn1On(ctx)) {
                     return;
                 }
-                LogX.i("[FN1] ServiceState slot1 " + describeSs(serviceState));
+                LogX.d("[FN1] ServiceState slot1 " + describeSs(serviceState));
                 if (serviceState != null && serviceState.getState() == ServiceState.STATE_POWER_OFF) {
                     LogX.i("[FN1] POWER_OFF, do not re-apply");
                     return;
                 }
                 if (wwanRegistered(serviceState)) {
+                    String mcc = wwanMccMnc(serviceState);
                     String why = isDomesticRoam(serviceState) ? "ultra-roam" : "wwan-in-service";
-                    LogX.i("[FN1] WWAN registered (" + why + ") -> force OOS");
+                    LogX.i("[FN1] WWAN registered (" + why + ") mccMnc=" + mcc
+                            + " alpha=" + serviceState.getOperatorAlphaLong()
+                            + " -> re-apply " + Prefs.plmn(ctx));
                     applyManual(why);
                     return;
                 }
                 firstLockDone = true;
                 TelephonyManager local = tm();
                 int sel = selectionMode(local);
+                String want = Prefs.plmn(ctx);
+                String applied = Prefs.readGlobal(ctx, Const.G_FN1_APPLIED_PLMN);
                 if (wlanServing(serviceState)) {
-                    logSkip("[FN1] IWLAN serving, WWAN not registered; lock holding, skip apply"
-                            + " selection=" + LogX.selectionName(sel));
+                    logSkip("[FN1] IWLAN serving, WWAN idle; holding "
+                            + want + " selection=" + LogX.selectionName(sel));
                     return;
                 }
-                if (isManualSelection(sel) || sel < 0) {
-                    logSkip("[FN1] WWAN OOS selection=" + LogX.selectionName(sel) + "; skip apply");
+                if ((isManualSelection(sel) || sel < 0) && want.equals(applied)) {
+                    logSkip("[FN1] WWAN OOS selection=" + LogX.selectionName(sel)
+                            + " holding " + want + "; skip apply");
                     return;
                 }
-                LogX.i("[FN1] lock lost (WWAN OOS but AUTO) -> re-apply invalid PLMN");
+                LogX.i("[FN1] lock lost (WWAN OOS AUTO or PLMN changed want="
+                        + want + " applied=" + applied + ") -> re-apply");
                 applyManual("lock-lost");
             } catch (Throwable t) {
                 LogX.e("[FN1] onServiceStateChanged failed", t);

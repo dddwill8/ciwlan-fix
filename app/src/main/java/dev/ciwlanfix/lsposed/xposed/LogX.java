@@ -5,6 +5,10 @@ import android.util.Log;
 final class LogX {
     private LogX() {}
 
+    static void d(String msg) {
+        Log.d(Const.TAG, msg);
+    }
+
     static void i(String msg) {
         Log.i(Const.TAG, msg);
     }

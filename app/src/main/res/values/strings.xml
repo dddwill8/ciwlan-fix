@@ -2,16 +2,27 @@
 <resources>
     <string name="app_name">CIWLAN Fix</string>
     <string name="xposed_description">卡 2 有 Wi-Fi 就打 Wi-Fi 电话，没网就借卡 1 的流量打。不用 HyperCeiler，也不用先拨暗码。</string>
-    <string name="safety_banner">假回锁设备：只改运行时电话接口。禁止刷分区、Magisk overlay、QCN/EFS、写 SIM FPLMN。卡 2 锁无服务会持久化手动选网，关掉下面的开关会还原。要停用：先关开关等还原，再去 LSPosed 禁用模块。</string>
+    <string name="safety_banner">假回锁设备：只改运行时电话接口。禁止刷分区、Magisk overlay、QCN/EFS、写 SIM FPLMN。卡 2 会持久化手动选一个国内网（联通/电信/广电），关掉开关会还原。不需要 HyperCeiler。要停用：先关开关等还原，再去 LSPosed 禁用模块。</string>
     <string name="master_title">卡 2 通话辅助</string>
-    <string name="master_summary">打开后会自动打开卡 2 的 Wi-Fi 通话、锁住卡 2 不连国内漫游网、并在没 Wi-Fi 时借卡 1 流量打电话。关掉即全部还原。不需要 HyperCeiler，也不用先拨 *#*#869434#*#*。</string>
+    <string name="master_summary">打开后会自动打开卡 2 的 Wi-Fi 通话、把卡 2 锁在选中的国内网上（注册不上就不会驻 Ultra），并在没 Wi-Fi 时借卡 1 流量打电话。关掉即全部还原。不需要 HyperCeiler，也不用先拨 *#*#869434#*#*。</string>
     <string name="master_switch">开启卡 2 通话辅助</string>
+    <string name="plmn_title">卡 2 手动选网</string>
+    <string name="plmn_summary">选一个 T-Mobile 注册不上的国内网。默认电信。若会漫游上联通，请改电信或广电。</string>
+    <string name="plmn_unicom">中国联通（46001）</string>
+    <string name="plmn_ct">中国电信（46011）</string>
+    <string name="plmn_cbn">中国广电（46015）</string>
     <string name="status_title">现在怎样</string>
     <string name="status_empty">还没读到运行状态。请确认 LSPosed 已启用本模块并勾了推荐应用，然后重启过。</string>
-    <string name="pro_title">专业日志（给排查用）</string>
+    <string name="debug_title">排查</string>
     <string name="refresh_status">刷新</string>
-    <string name="logcat_hint">电脑上看完整日志：adb logcat -s CIWLAN_FIX:D</string>
+    <string name="copy_adb">复制 adb 日志命令</string>
+    <string name="export_log">导出日志到 Download</string>
+    <string name="adb_copied">已复制：adb logcat -s CIWLAN_FIX:D</string>
+    <string name="export_ok">已保存到 Download：%1$s</string>
+    <string name="export_fail">导出失败：%1$s</string>
+    <string name="exporting">正在导出…</string>
     <string name="grant_hint">若开关写不进去，在电脑执行：\nadb shell su 0 pm grant dev.ciwlanfix.lsposed android.permission.WRITE_SECURE_SETTINGS</string>
     <string name="saved">已保存</string>
-    <string name="restore_done">已关闭并开始还原。请看专业日志确认，然后再去 LSPosed 禁用模块。</string>
+    <string name="plmn_saved">已改为%1$s，正在下发选网</string>
+    <string name="restore_done">已关闭并开始还原。等卡 2 回到自动选网，再去 LSPosed 禁用模块。</string>
 </resources>
