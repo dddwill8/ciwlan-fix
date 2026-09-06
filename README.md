@@ -77,9 +77,23 @@ T-Mobile 等美卡第一次开 Wi-Fi 通话，运营商有时还要紧急地址�
 
 直接禁模块或直接卸，卡 2 会停在无服务，而且这次锁网是持久的，重启也还在。必须先关开关还原。
 
-如果现在装的是 1.0.7/1.0.8-test（GSM-only），先在那一版关掉开关、等卡 2 制式回到 LTE/NR，再装 1.0.5。versionCode 更高，可以直接 `adb install -r`。
+## 不要再试
+
+这些在这台小米 17 Pro 上试过、失败了。改驻网逻辑前看 [docs/lessons.md](docs/lessons.md)。
+
+| 测试包 | 做法 | 结果 |
+| --- | --- | --- |
+| 1.0.4 的 `99999` | 手动选非法 PLMN | 约 25 分钟闪一次，toast「无法连接所选网络」，仍可能驻 Ultra |
+| 1.0.5-test | 卡 2 USER 制式=0 | 没脱离 WWAN，仍驻 Ultra |
+| 1.0.6-test | 卡 2 `setRadioPower(false)` | 两张卡都关机 |
+| 1.0.7-test | 卡 2 只留 2G | 不驻 LTE/NR，但约 10 分钟闪「无服务」；卸前必须还原制式 |
+| 1.0.8-test | IWLAN 时把语音状态画成在服务 | 搜网还在，只是界面假装没掉 |
+
+当前 **1.0.5（main）** 不是上面的 1.0.5-test：它是 1.0.4 的手动选网，PLMN 换成电信 / 广电 / 联通。
 
 ## 自己编
+
+改卡 2 选网 / 制式 / 开关无线电之前，先读 [docs/lessons.md](docs/lessons.md)。
 
 ```bash
 ./gradlew :app:assembleDebug

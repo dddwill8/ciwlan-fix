@@ -9,6 +9,7 @@ import android.telephony.TelephonyManager;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/** Slot 1 WWAN OOS via persistent manual PLMN. Do not revive GSM-only, radio-off, or fake IN_SERVICE — docs/lessons.md. */
 final class Fn1ForceOos {
     private static final int DOMAIN_CS = 1;
     private static final int DOMAIN_PS = 2;
